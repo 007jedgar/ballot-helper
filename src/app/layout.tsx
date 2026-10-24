@@ -9,9 +9,16 @@ import "./globals.css";
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const mono = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin"] });
 
+const description = "Upload your sample ballot, get nonpartisan research on every race and measure, and export your picks.";
+const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+
 export const metadata: Metadata = {
+  // Absolute base for the link-preview image URL (src/app/opengraph-image.tsx).
+  metadataBase: productionUrl ? new URL(`https://${productionUrl}`) : undefined,
   title: "Ballot Helper",
-  description: "Upload your sample ballot, get nonpartisan research on every race and measure, and export your picks.",
+  description,
+  openGraph: { title: "Ballot Helper", description, siteName: "Ballot Helper", type: "website" },
+  twitter: { card: "summary_large_image", title: "Ballot Helper", description },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
