@@ -4,6 +4,7 @@ import Link from "next/link";
 import { NoBallot } from "@/components/empty-state";
 import { ShareButton } from "@/components/share-button";
 import { Badge, Button, Spinner, buttonClass, kindLabel } from "@/components/ui";
+import { PARTY_LABELS, planContest } from "@/lib/prefs";
 import { formatEta, jobState, listJobs, retryJob, useEta, useProgress, type ResearchJob } from "@/lib/research";
 import { useBallot, useHydrated } from "@/lib/store";
 
@@ -13,13 +14,28 @@ export default function ResearchPage() {
   const removeContest = useBallot((s) => s.removeContest);
   const paused = useBallot((s) => s.paused);
   const setPaused = useBallot((s) => s.setPaused);
+  const prefs = useBallot((s) => s.prefs);
+  const prefsConfirmed = useBallot((s) => s.prefsConfirmed);
+  const forced = useBallot((s) => s.forced);
+  const forceContest = useBallot((s) => s.forceContest);
   const { done, total, errors } = useProgress();
   // `remaining` excludes failed items, so the estimate and Pause go away once nothing is left to run.
   const { pct, etaMs, remaining, ready } = useEta();
   if (!hydrated) return null;
   if (!ballot) return <NoBallot />;
+  if (!prefsConfirmed) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-32 text-center">
+        <p className="text-sm font-medium">Choose what to research first</p>
+        <p className="mt-1 text-[13px] text-muted">Tell us what you care about so research only covers what you need.</p>
+        <Link href="/setup" className={buttonClass("primary", "mt-6")}>
+          Set up research
+        </Link>
+      </div>
+    );
+  }
 
-  const jobs = listJobs(ballot);
+  const jobs = listJobs(ballot, prefs, forced);
   const header = [ballot.electionName, ballot.electionDate, ballot.jurisdiction ?? ballot.county, ballot.state]
     .filter(Boolean)
     .join(" · ");
@@ -41,6 +57,9 @@ export default function ResearchPage() {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
+          <Link href="/setup" className={buttonClass("ghost")}>
+            Preferences
+          </Link>
           {done > 0 && <ShareButton />}
           {remaining > 0 && <Button onClick={() => setPaused(!paused)}>{paused ? "Resume" : "Pause"}</Button>}
           <Link href="/compare" className={buttonClass("primary")}>
@@ -70,6 +89,14 @@ export default function ResearchPage() {
       <ul className="mt-8 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
         {ballot.contests.map((contest) => {
           const contestJobs = jobs.filter((j) => j.contest.id === contest.id);
+          const plan = planContest(contest, prefs, Boolean(forced[contest.id]));
+          const skippedNote = !plan.research
+            ? plan.reason === "uncontested"
+              ? "Uncontested, skipped"
+              : "Skipped by your settings"
+            : plan.partyFiltered && prefs.party && plan.candidates.length < contest.candidates.length
+              ? `Only ${PARTY_LABELS[prefs.party]} candidates checked`
+              : null;
           return (
             <li key={contest.id} className="group p-4">
               <div className="flex items-start justify-between gap-4">
@@ -96,6 +123,14 @@ export default function ResearchPage() {
                   <JobRow key={job.key} job={job} />
                 ))}
               </ul>
+              {skippedNote && (
+                <p className="mt-2 flex items-center gap-2 text-[13px] text-faint">
+                  {skippedNote}
+                  <button className="text-muted underline-offset-2 hover:text-fg hover:underline" onClick={() => forceContest(contest.id)}>
+                    Research {contest.kind === "measure" ? "this measure" : "everyone"}
+                  </button>
+                </p>
+              )}
             </li>
           );
         })}

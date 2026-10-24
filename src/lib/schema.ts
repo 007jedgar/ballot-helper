@@ -17,6 +17,11 @@ export const ContestSchema = z.object({
   district: z.string().nullable().describe("District, seat, division, or jurisdiction qualifier, or null"),
   voteFor: z.number().describe("How many selections are allowed (1 for most offices and all measures)"),
   isJudicial: z.boolean().describe("True if the office is a judgeship or the retention is for a judge"),
+  category: z
+    .enum(["federal", "state", "judicial", "county", "local", "measure"])
+    .describe(
+      "federal = US offices; state = statewide/legislative offices; judicial = any judgeship or judge retention; county = county offices; local = city, school board, college, appraisal and other special districts; measure = any ballot measure",
+    ),
   candidates: z
     .array(BallotCandidateSchema)
     .describe("Candidates for candidate contests; the single person for retention contests; empty for measures"),

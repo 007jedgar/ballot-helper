@@ -51,7 +51,7 @@ export default function UploadPage() {
         if (!ballot.contests.length) throw new Error("No contests found. Is this a sample ballot?");
         await saveOriginal(raw);
         setBallot(ballot, raw.name);
-        router.push("/research");
+        router.push("/setup");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");
       } finally {

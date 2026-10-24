@@ -4,9 +4,11 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { BallotExtract, CandidateResearch, ContestExtract, MeasureResearch } from "./schema";
+import { DEFAULT_PREFS, straightTicketPicks, type Party, type Prefs } from "./prefs";
 import type { ShareSnapshot } from "./share-schema";
 
-export type Contest = ContestExtract & { id: string; page?: number };
+// `category` is optional: ballots saved before it existed don't have it (see categoryOf).
+export type Contest = Omit<ContestExtract, "category"> & Partial<Pick<ContestExtract, "category">> & { id: string; page?: number };
 export type Ballot = Omit<BallotExtract, "contests"> & { contests: Contest[] };
 
 export type Job<T> = { status: "idle" | "loading" | "done" | "error"; data?: T; error?: string };
@@ -22,7 +24,13 @@ type State = {
   step: number;
   paused: boolean;
   showFlags: boolean;
-  setBallot: (ballot: Omit<BallotExtract, "contests"> & { contests: (ContestExtract & { page?: number })[] }, fileName: string) => void;
+  /** Research preferences; kept across ballots as the next ballot's defaults. */
+  prefs: Prefs;
+  /** Research waits until the voter confirms preferences for this ballot. */
+  prefsConfirmed: boolean;
+  /** Contests the voter asked to research despite their preferences. */
+  forced: Record<string, true>;
+  setBallot: (ballot: Omit<BallotExtract, "contests"> & { contests: Omit<Contest, "id">[] }, fileName: string) => void;
   importShare: (share: ShareSnapshot) => void;
   removeContest: (id: string) => void;
   setCandidateJob: (key: string, job: Job<CandidateResearch>) => void;
@@ -31,6 +39,10 @@ type State = {
   setStep: (step: number) => void;
   setPaused: (paused: boolean) => void;
   setShowFlags: (show: boolean) => void;
+  confirmPrefs: (prefs: Prefs, preselect: Record<string, string[]>) => void;
+  forceContest: (id: string) => void;
+  /** Selects `party`'s candidates in every partisan race; returns how many races were filled. */
+  applyStraightTicket: (party: Party) => number;
   reset: () => void;
 };
 
@@ -43,12 +55,15 @@ const empty = {
   step: 0,
   paused: false,
   showFlags: true,
+  prefsConfirmed: false,
+  forced: {},
 };
 
 export const useBallot = create<State>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...empty,
+      prefs: DEFAULT_PREFS,
       setBallot: (ballot, fileName) =>
         set((s) => ({
           ...empty,
@@ -68,6 +83,7 @@ export const useBallot = create<State>()(
             candidates: done<CandidateResearch>(share.candidates),
             measures: done<MeasureResearch>(share.measures),
             choices: share.choices ?? {},
+            prefsConfirmed: true,
           };
         }),
       removeContest: (id) =>
@@ -87,6 +103,16 @@ export const useBallot = create<State>()(
       setStep: (step) => set({ step }),
       setPaused: (paused) => set({ paused }),
       setShowFlags: (showFlags) => set({ showFlags }),
+      confirmPrefs: (prefs, preselect) =>
+        set((s) => ({ prefs, prefsConfirmed: true, choices: { ...preselect, ...s.choices } })),
+      forceContest: (id) => set((s) => ({ forced: { ...s.forced, [id]: true } })),
+      applyStraightTicket: (party) => {
+        const ballot = get().ballot;
+        if (!ballot) return 0;
+        const picks = straightTicketPicks(ballot.contests, party);
+        set((s) => ({ choices: { ...s.choices, ...picks } }));
+        return Object.keys(picks).length;
+      },
       // Keep the red-flag preference across ballots.
       reset: () => set((s) => ({ ...empty, showFlags: s.showFlags })),
     }),
@@ -98,7 +124,15 @@ export const useBallot = create<State>()(
         const p = (persisted ?? {}) as Partial<State>;
         const unstick = <T,>(jobs: Record<string, Job<T>> = {}) =>
           Object.fromEntries(Object.entries(jobs).map(([k, j]) => [k, j.status === "loading" ? { status: "idle" } : j]));
-        return { ...current, ...p, candidates: unstick(p.candidates), measures: unstick(p.measures) } as State;
+        return {
+          ...current,
+          ...p,
+          candidates: unstick(p.candidates),
+          measures: unstick(p.measures),
+          prefs: { ...DEFAULT_PREFS, ...p.prefs },
+          // Ballots saved before preferences existed were already researching.
+          prefsConfirmed: p.prefsConfirmed ?? Boolean(p.ballot),
+        } as State;
       },
     },
   ),

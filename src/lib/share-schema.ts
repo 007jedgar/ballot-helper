@@ -9,7 +9,7 @@ export const ShareSnapshotSchema = z.object({
     state: z.string().max(100).nullable(),
     county: z.string().max(100).nullable(),
     jurisdiction: z.string().max(300).nullable(),
-    contests: z.array(ContestSchema.extend({ id: z.string().max(20), page: z.number().optional() })).max(500),
+    contests: z.array(ContestSchema.extend({ id: z.string().max(20), page: z.number().optional(), category: ContestSchema.shape.category.optional() })).max(500),
   }),
   // Research is validated loosely: entries cached before newer fields existed must still load.
   candidates: z.record(z.string().max(40), z.looseObject({ name: z.string() })),

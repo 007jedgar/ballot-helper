@@ -8,6 +8,7 @@ import { Button } from "@/components/ui";
 import { exportBallotPdf } from "@/lib/export-pdf";
 import { loadOriginal } from "@/lib/file-store";
 import { canMark, markOriginal, type MarkReport } from "@/lib/mark-original";
+import { PARTIES, PARTY_LABELS, partyOf, type Party } from "@/lib/prefs";
 import { useBallot, useHydrated } from "@/lib/store";
 
 export default function ReviewPage() {
@@ -20,6 +21,8 @@ export default function ReviewPage() {
   const [original, setOriginal] = useState<File | null>(null);
   const [marking, setMarking] = useState(false);
   const [markResult, setMarkResult] = useState<MarkReport | string | null>(null);
+  const applyStraightTicket = useBallot((s) => s.applyStraightTicket);
+  const [ticket, setTicket] = useState<{ party: Party; races: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +95,33 @@ export default function ReviewPage() {
           )}
         </div>
       </div>
+
+      {(() => {
+        const parties = PARTIES.filter((p) => ballot.contests.some((c) => c.candidates.some((x) => partyOf(x.party) === p)));
+        if (!parties.length) return null;
+        return (
+          <div className="mb-6 rounded-xl border border-line bg-surface p-4 text-[13px] print:hidden">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 font-medium">Straight ticket</span>
+              {parties.map((p) => (
+                <Button
+                  key={p}
+                  variant={ticket?.party === p ? "primary" : "secondary"}
+                  className="h-8 px-3"
+                  onClick={() => setTicket({ party: p, races: applyStraightTicket(p) })}
+                >
+                  {PARTY_LABELS[p]}
+                </Button>
+              ))}
+            </div>
+            <p className="mt-2 text-muted">
+              {ticket
+                ? `Selected ${PARTY_LABELS[ticket.party]} candidates in ${ticket.races} race${ticket.races === 1 ? "" : "s"}. Nonpartisan races and measures were left as they were.`
+                : "Selects one party's candidates in every partisan race. Nonpartisan races and measures are left for you to decide."}
+            </p>
+          </div>
+        );
+      })()}
 
       {markResult && (
         <div className="mb-6 rounded-xl border border-line bg-surface p-4 text-[13px] print:hidden">

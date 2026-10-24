@@ -12,9 +12,11 @@ export function CandidateCard({
   job,
   selected,
   onSelect,
+  onQuickSelect,
   onRetry,
   selectable = true,
   showFlags,
+  skipped,
 }: {
   name: string;
   party: string | null;
@@ -22,9 +24,13 @@ export function CandidateCard({
   job: Job<CandidateResearch>;
   selected: boolean;
   onSelect: () => void;
+  /** The checkbox at the top of the card: select and move on. */
+  onQuickSelect?: () => void;
   onRetry: () => void;
   selectable?: boolean;
   showFlags: boolean;
+  /** Set when the voter's preferences leave this candidate out of research. */
+  skipped?: { reason: string; onResearch: () => void };
 }) {
   const r = job.data;
   // Research cached before red flags existed has no field.
@@ -54,7 +60,22 @@ export function CandidateCard({
             </h3>
             <p className="text-[13px] text-muted">{r?.party ?? party ?? "Nonpartisan"}</p>
           </div>
-          {selected && <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent text-[11px]">✓</span>}
+          {selectable ? (
+            <button
+              role="checkbox"
+              aria-checked={selected}
+              aria-label={selected ? `Unselect ${name}` : `Select ${name} and continue`}
+              title={selected ? "Unselect" : "Select and continue"}
+              onClick={onQuickSelect ?? onSelect}
+              className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[13px] transition-colors ${
+                selected ? "border-accent bg-accent text-white" : "border-line-strong text-transparent hover:border-accent hover:text-accent/60"
+              }`}
+            >
+              ✓
+            </button>
+          ) : (
+            selected && <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent text-[11px]">✓</span>
+          )}
         </div>
         {r && (
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -80,6 +101,13 @@ export function CandidateCard({
             <Bullets title="Endorsements" items={r.endorsements} limit={3} />
             <Links r={r} />
           </>
+        ) : job.status === "idle" && skipped ? (
+          <div className="text-[13px]">
+            <p className="text-muted">{skipped.reason}</p>
+            <Button variant="ghost" className="mt-2 h-7 px-2 text-[12px]" onClick={skipped.onResearch}>
+              Research this race
+            </Button>
+          </div>
         ) : job.status === "error" ? (
           <div className="text-[13px]">
             <p className="text-bad">{job.error}</p>

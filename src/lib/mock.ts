@@ -16,33 +16,58 @@ export async function mockBallot(): Promise<BallotExtract> {
     jurisdiction: "Columbus Ward 12",
     contests: [
       {
-        kind: "candidate", title: "Governor", district: null, voteFor: 1, isJudicial: false,
+        kind: "candidate", title: "Governor", district: null, voteFor: 1, isJudicial: false, category: "state",
         candidates: [{ name: "Alex Rivera", party: "Democratic" }, { name: "Jordan Blake", party: "Republican" }, { name: "Sam Ortiz", party: "Libertarian" }],
         measureText: null, options: [],
       },
       {
-        kind: "candidate", title: "Judge of the Court of Common Pleas", district: "General Division", voteFor: 1, isJudicial: true,
+        kind: "candidate", title: "Judge of the Court of Common Pleas", district: "General Division", voteFor: 1, isJudicial: true, category: "judicial",
         candidates: [{ name: "Patricia Huang", party: null }, { name: "Mark Delaney", party: null }],
         measureText: null, options: [],
       },
       {
-        kind: "candidate", title: "City Council", district: "At large", voteFor: 2, isJudicial: false,
+        kind: "candidate", title: "City Council", district: "At large", voteFor: 2, isJudicial: false, category: "local",
         candidates: [{ name: "Dana Fox", party: null }, { name: "Lee Park", party: null }, { name: "Chris Moore", party: null }],
         measureText: null, options: [],
       },
       {
-        kind: "retention", title: "Supreme Court Retention", district: null, voteFor: 1, isJudicial: true,
+        kind: "candidate", title: "County Treasurer", district: null, voteFor: 1, isJudicial: false, category: "county",
+        candidates: [{ name: "Pat Lee", party: "Republican" }], measureText: null, options: [],
+      },
+      {
+        kind: "retention", title: "Supreme Court Retention", district: null, voteFor: 1, isJudicial: true, category: "judicial",
         candidates: [{ name: "Robert Klein", party: null }], measureText: "Shall Justice Robert Klein be retained in office?", options: ["Yes", "No"],
       },
       {
-        kind: "measure", title: "Issue 1: Transit Levy", district: "Franklin County", voteFor: 1, isJudicial: false, candidates: [],
+        kind: "measure", title: "Issue 1: Transit Levy", district: "Franklin County", voteFor: 1, isJudicial: false, category: "measure", candidates: [],
         measureText: "A 0.5% sales tax for 25 years to expand bus rapid transit and sidewalks.", options: ["For the tax levy", "Against the tax levy"],
       },
     ],
   };
 }
 
-export async function mockCandidate(name: string, party: string | null | undefined, isJudicial: boolean): Promise<CandidateResearch> {
+export async function mockCandidate(
+  name: string,
+  party: string | null | undefined,
+  isJudicial: boolean,
+  topics: readonly string[] = [],
+): Promise<CandidateResearch> {
+  const r = await mockCandidateFull(name, party, isJudicial);
+  if (!topics.length) return r;
+  const keep = (t: string, v: string[]) => (topics.includes(t) ? v : []);
+  return {
+    ...r,
+    qualifications: keep("qualifications", r.qualifications),
+    keyPositions: keep("positions", r.keyPositions),
+    endorsements: keep("endorsements", r.endorsements),
+    accomplishments: keep("record", r.accomplishments),
+    criticisms: keep("criticisms", r.criticisms),
+    redFlags: topics.includes("redFlags") ? r.redFlags : [],
+    news: topics.includes("news") ? r.news : [],
+  };
+}
+
+async function mockCandidateFull(name: string, party: string | null | undefined, isJudicial: boolean): Promise<CandidateResearch> {
   await delay(Number(process.env.MOCK_DELAY ?? 1500) + Math.random() * 3000);
   const seed = name.length;
   const incumbent = seed % 2 === 0;

@@ -1,4 +1,5 @@
 import "server-only";
+import { TOPICS, isFullTopics, type Topic } from "./prefs";
 
 export type ElectionContext = {
   electionName?: string | null;
@@ -39,15 +40,41 @@ Rules:
 - Be concise. Notes, not prose.
 - You are gathering facts for an analyst who will make the judgment calls. Record what sources say, including anything that could matter for conflicts of interest or misconduct; don't editorialize or decide what is a red flag.`;
 
-export function candidateTask(p: {
-  name: string;
-  party?: string | null;
-  office: string;
-  district?: string | null;
-  isJudicial: boolean;
-  otherCandidates: string[];
-  election: ElectionContext;
-}): string {
+export function candidateTask(
+  p: {
+    name: string;
+    party?: string | null;
+    office: string;
+    district?: string | null;
+    isJudicial: boolean;
+    otherCandidates: string[];
+    election: ElectionContext;
+  },
+  topics: readonly Topic[] = TOPICS,
+): string {
+  const want = new Set(topics);
+  const items = [
+    "Ballotpedia page, campaign website, official social media accounts, whether they are the incumbent, and their date of birth or age if published.",
+    want.has("qualifications") &&
+      `Qualifications for THIS office specifically: education, professional licenses, relevant work, years of experience, prior offices.${
+        p.isJudicial
+          ? " This is a JUDICIAL race: confirm whether they have a law degree (JD/LLB), bar admission year, years practicing, type of practice, prior judicial experience, and any bar association ratings or judicial evaluation results."
+          : ""
+      }`,
+    want.has("positions") && "Key policy positions/priorities (from their own site where possible).",
+    want.has("record") && "If incumbent: concrete accomplishments in office (bills, votes, rulings, programs).",
+    want.has("endorsements") && "Notable endorsements.",
+    want.has("criticisms") && "Substantive criticisms or controversies raised by opponents, press, or watchdogs.",
+    want.has("news") && "Up to 5 recent relevant news articles (title, outlet, date, URL).",
+    want.has("redFlags") &&
+      `Red flags, with sources:
+   - Conflicts of interest with THIS office: businesses they own or lead, board seats, employers, major investments, or close family ties that the office would regulate, fund, contract with, or compete against (e.g. an oil company owner running for a seat that regulates oil and gas; a board member of private religious schools running for public school board).
+   - Criminal convictions for serious offenses, especially while in a position of power.
+   - Impeachments or removals from office.
+   - Formal ethics findings or sanctions (ethics commission, judicial conduct commission, state bar discipline).
+   Only include what reliable sources document. Note pending charges as pending; don't treat mere accusations as findings.`,
+  ].filter((x): x is string => Boolean(x));
+
   return `Research this candidate for ${describeElection(p.election)}:
 
 Name: ${p.name}
@@ -56,27 +83,33 @@ Running for: ${p.office}${p.district ? ` (${p.district})` : ""}
 Other candidates in this race: ${p.otherCandidates.join(", ") || "none"}
 
 Find and note:
-1. Ballotpedia page; campaign website; official social media accounts.
-2. Whether they are the incumbent. If so: concrete accomplishments in office AND substantive criticisms/controversies.
-3. Qualifications for THIS office specifically: education, professional licenses, relevant work, years of experience, prior offices.${
-    p.isJudicial
-      ? "\n   This is a JUDICIAL race: confirm whether they have a law degree (JD/LLB), bar admission year, years practicing, type of practice, prior judicial experience, and any bar association ratings or judicial evaluation results."
-      : ""
-  }
-4. Key policy positions/priorities (from their own site where possible).
-5. Notable endorsements.
-6. Criticisms raised by opponents, press, or watchdogs.
-7. Up to 5 recent relevant news articles (title, outlet, date, URL).
-8. Their date of birth or age, if published.
-9. Red flags, with sources:
-   - Conflicts of interest with THIS office: businesses they own or lead, board seats, employers, major investments, or close family ties that the office would regulate, fund, contract with, or compete against (e.g. an oil company owner running for a seat that regulates oil and gas; a board member of private religious schools running for public school board).
-   - Criminal convictions for serious offenses, especially while in a position of power.
-   - Impeachments or removals from office.
-   - Formal ethics findings or sanctions (ethics commission, judicial conduct commission, state bar discipline).
-   Only include what reliable sources document. Note pending charges as pending; don't treat mere accusations as findings.`;
+${items.map((x, i) => `${i + 1}. ${x}`).join("\n")}${
+    isFullTopics(topics) ? "" : "\n\nThe voter only wants the items above. Don't spend searches on anything else."
+  }`;
 }
 
-export const CANDIDATE_STRUCTURE = `Convert the research notes into the candidate profile schema. Each bullet: one short, specific line (aim for under 20 words). Prefer specifics (numbers, years, names) over adjectives. If notes are thin or ambiguous about identity, set confidence to "low". redFlags: include only documented items from the notes (pending charges may be included if the title says "pending"); never infer a conflict from party affiliation or ideology alone.`;
+/** Fewer topics need fewer web lookups. */
+export function researchBudget(topics: readonly Topic[]) {
+  if (topics.length <= 2) return { searches: 3, fetches: 2 };
+  if (topics.length <= 4) return { searches: 5, fetches: 3 };
+  return { searches: 6, fetches: 4 };
+}
+
+export function candidateStructure(topics: readonly Topic[] = TOPICS) {
+  const base = `Convert the research notes into the candidate profile schema. Each bullet: one short, specific line (aim for under 20 words). Prefer specifics (numbers, years, names) over adjectives. If notes are thin or ambiguous about identity, set confidence to "low". redFlags: include only documented items from the notes (pending charges may be included if the title says "pending"); never infer a conflict from party affiliation or ideology alone.`;
+  if (isFullTopics(topics)) return base;
+  const fields: Record<Topic, string> = {
+    qualifications: "qualifications",
+    positions: "keyPositions",
+    endorsements: "endorsements",
+    record: "accomplishments",
+    criticisms: "criticisms",
+    redFlags: "redFlags",
+    news: "news",
+  };
+  const skip = TOPICS.filter((t) => !topics.includes(t)).map((t) => fields[t]);
+  return `${base} The voter didn't ask for these, so leave them as empty arrays: ${skip.join(", ")}.`;
+}
 
 export function measureTask(p: { title: string; district?: string | null; text?: string | null; election: ElectionContext }): string {
   return `Research this ballot measure for ${describeElection(p.election)}:

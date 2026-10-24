@@ -3,11 +3,18 @@
 Upload your sample ballot and get nonpartisan research on every race and measure on it. Then compare your options in a step-by-step wizard and export a marked-up sample ballot.
 
 - **Upload** a PDF, screenshot, or photo. AI reads every contest (multi-page PDFs are split and read page by page).
+- **Choose what to research.** Before research starts, you pick what you care about, and the app researches only that:
+  - **Straight ticket:** in partisan races, only your party's candidates are checked (qualifications and red flags), and they can be pre-selected.
+  - **Topics:** qualifications, positions, endorsements, record, criticisms, red flags, news, or presets like "Red flags only". Fewer topics means fewer web searches per candidate and lighter analysis.
+  - **Ballot sections:** federal, state, judicial, county, local, measures.
+  - **Skip uncontested races.**
+
+  The page shows how many candidates will be researched and roughly how long it will take. Anything skipped can be researched later with one click.
 - **Research.** For each candidate, the app searches Ballotpedia, their campaign site and socials, endorsements, and news coverage. Each card lists qualifications for the office (for judges: law degree, bar admission, and experience), positions, endorsements, criticisms, and, for incumbents, their record in office. Age is shown only when it's over 60, and appearance is never described.
 - **Measures** get a plain-English summary, what happens if they pass or fail, fiscal impact, arguments on both sides, and a critical analysis.
 - **Red flags** (toggleable): a red flag next to a candidate's name marks a documented conflict of interest with the office they're running for (e.g. an oil company owner running to regulate oil, a private religious school board member running for public school board), a serious criminal conviction, an impeachment, or a formal ethics finding. An explanation and a source come with each one.
-- **Compare** races side by side and pick. Use ← / → to move between contests. Research runs in the background, starting with the race you're viewing, and can be paused.
-- **Export** a PDF of your sample ballot with your choices checked, or print it.
+- **Compare** races side by side and pick. The checkbox at the top of each card selects and moves to the next race once it's filled. Use ← / → to move between contests. Research runs in the background, starting with the race you're viewing, and can be paused.
+- **Export** a PDF of your sample ballot with your choices checked, or print it. A **Straight ticket** control there selects one party's candidates in every partisan race and leaves nonpartisan races and measures alone.
 - **Share** a link to a ballot's finished research, optionally with your picks. Whoever opens it can compare right away without re-researching. Your uploaded file is never shared. Links are stored in the same private Blob store as the cache.
 - **Fill in your original ballot.** If you uploaded a text-based PDF (like most county sample ballots), the app fills in the boxes next to your picks on the original document. It finds each name in the PDF's text layer and the box beside it on the rendered page. Anything it can't locate is listed so you can mark it by hand. Scans and photos don't have a text layer, so only the generated PDF is available for those.
 

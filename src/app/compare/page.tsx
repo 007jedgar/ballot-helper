@@ -7,6 +7,7 @@ import { CandidateCard } from "@/components/candidate-card";
 import { NoBallot } from "@/components/empty-state";
 import { MeasurePanel } from "@/components/measure-panel";
 import { Badge, Button, FlagIcon, Toggle, buttonClass, kindLabel } from "@/components/ui";
+import { planContest, PARTY_LABELS } from "@/lib/prefs";
 import { retryJob } from "@/lib/research";
 import { candidateKey, useBallot, useHydrated, type Contest } from "@/lib/store";
 
@@ -113,7 +114,7 @@ export default function ComparePage() {
           </p>
         </div>
 
-        <ContestBody contest={contest} />
+        <ContestBody contest={contest} onAdvance={() => (isLast ? router.push("/review") : setStep(step + 1))} />
 
         <div className="sticky bottom-0 mt-10 flex items-center justify-between border-t border-line bg-bg/85 py-4 backdrop-blur-md">
           <Button variant="ghost" disabled={step === 0} onClick={() => setStep(step - 1)}>
@@ -142,13 +143,29 @@ function instructions(c: Contest) {
   return "Vote yes or no";
 }
 
-function ContestBody({ contest }: { contest: Contest }) {
+function ContestBody({ contest, onAdvance }: { contest: Contest; onAdvance: () => void }) {
   const chosen = useBallot((s) => s.choices[contest.id]) ?? NONE;
   const toggle = useBallot((s) => s.toggleChoice);
   const candidates = useBallot((s) => s.candidates);
   const measures = useBallot((s) => s.measures);
   const showFlags = useBallot((s) => s.showFlags);
+  const prefs = useBallot((s) => s.prefs);
+  const forced = useBallot((s) => s.forced);
+  const forceContest = useBallot((s) => s.forceContest);
   const options = contest.options.length ? contest.options : ["Yes", "No"];
+
+  const plan = planContest(contest, prefs, Boolean(forced[contest.id]));
+  const skipReason = !plan.research
+    ? plan.reason === "uncontested"
+      ? "Uncontested race, skipped by your research settings."
+      : "This part of the ballot is skipped by your research settings."
+    : plan.partyFiltered && prefs.party
+      ? `Not researched: straight-ticket ${PARTY_LABELS[prefs.party]} setting.`
+      : null;
+  const skippedFor = (i: number | null) =>
+    skipReason && (i === null || !plan.research || !plan.candidates.includes(i))
+      ? { reason: skipReason, onResearch: () => forceContest(contest.id) }
+      : undefined;
 
   if (contest.kind === "measure") {
     return (
@@ -156,7 +173,8 @@ function ContestBody({ contest }: { contest: Contest }) {
         <MeasurePanel
           job={measures[contest.id] ?? { status: "idle" }}
           text={contest.measureText}
-          onRetry={() => retryJob({ kind: "measure", key: contest.id, contest })}
+          onRetry={() => retryJob({ kind: "measure", key: contest.id })}
+          skipped={skippedFor(null)}
         />
         <OptionPicker options={options} chosen={chosen} onPick={(o) => toggle(contest.id, o, 1)} />
       </>
@@ -180,7 +198,15 @@ function ContestBody({ contest }: { contest: Contest }) {
               selectable={contest.kind === "candidate"}
               showFlags={showFlags}
               onSelect={() => toggle(contest.id, c.name, contest.voteFor)}
-              onRetry={() => retryJob({ kind: "candidate", key, contest, index: i })}
+              onQuickSelect={() => {
+                const wasSelected = chosen.includes(c.name);
+                toggle(contest.id, c.name, contest.voteFor);
+                // Selecting the last open slot moves on, after a beat so the check is visible.
+                const filled = useBallot.getState().choices[contest.id]?.length ?? 0;
+                if (!wasSelected && filled >= contest.voteFor) setTimeout(onAdvance, 350);
+              }}
+              onRetry={() => retryJob({ kind: "candidate", key })}
+              skipped={skippedFor(i)}
             />
           );
         })}

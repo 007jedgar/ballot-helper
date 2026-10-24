@@ -5,8 +5,29 @@ import type { Job } from "@/lib/store";
 import { Bullets } from "./bullets";
 import { Badge, Button } from "./ui";
 
-export function MeasurePanel({ job, text, onRetry }: { job: Job<MeasureResearch>; text: string | null; onRetry: () => void }) {
+export function MeasurePanel({
+  job,
+  text,
+  onRetry,
+  skipped,
+}: {
+  job: Job<MeasureResearch>;
+  text: string | null;
+  onRetry: () => void;
+  skipped?: { reason: string; onResearch: () => void };
+}) {
   const r = job.data;
+  if (job.status === "idle" && skipped) {
+    return (
+      <div className="rounded-xl border border-line bg-surface p-5 text-[13px]">
+        <p className="text-muted">{skipped.reason}</p>
+        {text && <p className="mt-3 whitespace-pre-line leading-relaxed text-fg/80">{text}</p>}
+        <Button variant="ghost" className="mt-3 h-7 px-2 text-[12px]" onClick={skipped.onResearch}>
+          Research this measure
+        </Button>
+      </div>
+    );
+  }
   if (job.status === "error") {
     return (
       <div className="rounded-xl border border-line bg-surface p-5 text-[13px]">

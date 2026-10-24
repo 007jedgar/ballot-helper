@@ -122,13 +122,16 @@ export async function extractFromFile<S extends z.ZodType>(
  * Research is split into two steps, each its own HTTP request, so each gets
  * the full serverless time limit: gather notes from the web, then analyze them.
  */
-export async function gatherNotes(system: string, task: string): Promise<string> {
-  return requireProvider() === "claude" ? claudeResearch(system, task) : groqResearch(system, task);
+export type SearchBudget = { searches: number; fetches: number };
+const DEFAULT_BUDGET: SearchBudget = { searches: 6, fetches: 4 };
+
+export async function gatherNotes(system: string, task: string, budget: SearchBudget = DEFAULT_BUDGET): Promise<string> {
+  return requireProvider() === "claude" ? claudeResearch(system, task, budget) : groqResearch(system, task);
 }
 
 export async function analyzeNotes<S extends z.ZodType>(
   schema: S,
-  opts: { task: string; notes: string; structureHint: string; tier: AnalysisTier },
+  opts: { task: string; notes: string; structureHint: string; tier: AnalysisTier; effort?: "low" | "medium" | "high" },
 ): Promise<z.infer<S>> {
   const provider = requireProvider();
   const prompt = `${opts.structureHint}\n\nThe research assignment was:\n<assignment>\n${opts.task}\n</assignment>\n\nResearch notes (with source URLs):\n<notes>\n${opts.notes}\n</notes>\n\nOnly use facts present in the notes. Use empty arrays or null where the notes have nothing.`;
@@ -140,7 +143,7 @@ export async function analyzeNotes<S extends z.ZodType>(
       max_tokens: 16000,
       ...fallback(model),
       thinking: { type: "adaptive" },
-      output_config: { effort: opts.tier === "measure" ? "high" : "medium", format: betaZodOutputFormat(schema) },
+      output_config: { effort: opts.effort ?? (opts.tier === "measure" ? "high" : "medium"), format: betaZodOutputFormat(schema) },
       messages: [{ role: "user", content: prompt }],
     });
     if (!res.parsed_output) throw new Error("Could not structure the research results.");
@@ -168,11 +171,11 @@ const textOf = (content: Anthropic.Beta.BetaContentBlock[]) =>
     .join("\n")
     .trim();
 
-async function claudeResearch(system: string, task: string): Promise<string> {
+async function claudeResearch(system: string, task: string, budget: SearchBudget): Promise<string> {
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: task }];
   const tools: Anthropic.Beta.BetaToolUnion[] = [
-    { type: "web_search_20260209", name: "web_search", max_uses: 6 },
-    { type: "web_fetch_20260209", name: "web_fetch", max_uses: 4 },
+    { type: "web_search_20260209", name: "web_search", max_uses: budget.searches },
+    { type: "web_fetch_20260209", name: "web_fetch", max_uses: budget.fetches },
   ];
   let writeUp = false;
   for (let turn = 0; turn < 6; turn++) {

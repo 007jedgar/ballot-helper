@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isFullTopics, planContest, type Prefs, type Topic } from "./prefs";
 import type { CandidateResearch, MeasureResearch } from "./schema";
 import { candidateKey, useBallot, type Ballot, type Contest, type Job } from "./store";
 
@@ -22,15 +23,29 @@ let unloading = false;
 if (typeof window !== "undefined") window.addEventListener("pagehide", () => (unloading = true));
 
 export type ResearchJob =
-  | { kind: "candidate"; key: string; contest: Contest; index: number }
+  | { kind: "candidate"; key: string; contest: Contest; index: number; topics: Topic[] }
   | { kind: "measure"; key: string; contest: Contest };
 
-export function listJobs(ballot: Ballot): ResearchJob[] {
-  return ballot.contests.flatMap<ResearchJob>((contest) =>
-    contest.kind === "measure"
-      ? [{ kind: "measure", key: contest.id, contest }]
-      : contest.candidates.map((_, index) => ({ kind: "candidate", key: candidateKey(contest.id, index), contest, index })),
-  );
+/** The research the voter's preferences call for (plus any races they asked for explicitly). */
+export function listJobs(ballot: Ballot, prefs: Prefs, forced: Record<string, true>): ResearchJob[] {
+  return ballot.contests.flatMap<ResearchJob>((contest) => {
+    const plan = planContest(contest, prefs, Boolean(forced[contest.id]));
+    if (!plan.research) return [];
+    if (contest.kind === "measure") return [{ kind: "measure", key: contest.id, contest }];
+    return plan.candidates.map((index) => ({
+      kind: "candidate",
+      key: candidateKey(contest.id, index),
+      contest,
+      index,
+      topics: plan.topics,
+    }));
+  });
+}
+
+/** Jobs for the current store state. */
+export function currentJobs(): ResearchJob[] {
+  const { ballot, prefs, forced } = useBallot.getState();
+  return ballot ? listJobs(ballot, prefs, forced) : [];
 }
 
 export function jobState(job: ResearchJob): Job<unknown> {
@@ -101,6 +116,8 @@ async function run(job: ResearchJob, ballot: Ballot) {
         isJudicial: job.contest.isJudicial,
         otherCandidates: job.contest.candidates.filter((_, i) => i !== job.index).map((o) => o.name),
         election,
+        // Omitted means a full profile (and shares the full-profile cache entry).
+        ...(isFullTopics(job.topics) ? {} : { topics: job.topics }),
       });
       sessionDone++;
       useBallot.getState().setCandidateJob(job.key, { status: "done", data });
@@ -126,18 +143,21 @@ export function useResearchRunner() {
   const measures = useBallot((s) => s.measures);
   const step = useBallot((s) => s.step);
   const paused = useBallot((s) => s.paused);
+  const prefs = useBallot((s) => s.prefs);
+  const prefsConfirmed = useBallot((s) => s.prefsConfirmed);
+  const forced = useBallot((s) => s.forced);
 
   useEffect(() => {
-    if (!ballot || paused) return;
+    if (!ballot || paused || !prefsConfirmed) return;
     const order = new Map(ballot.contests.map((c, i) => [c.id, i < step ? i + ballot.contests.length : i]));
-    const pending = listJobs(ballot)
+    const pending = listJobs(ballot, prefs, forced)
       .filter((j) => !inflight.has(j.key) && jobState(j).status === "idle")
       .sort((a, b) => order.get(a.contest.id)! - order.get(b.contest.id)!);
     pending.slice(0, Math.max(0, CONCURRENCY - inflight.size)).forEach((j) => void run(j, ballot));
-  }, [ballot, candidates, measures, step, paused]);
+  }, [ballot, candidates, measures, step, paused, prefs, prefsConfirmed, forced]);
 }
 
-export function retryJob(job: ResearchJob) {
+export function retryJob(job: Pick<ResearchJob, "kind" | "key">) {
   const s = useBallot.getState();
   if (job.kind === "measure") s.setMeasureJob(job.key, { status: "idle" });
   else s.setCandidateJob(job.key, { status: "idle" });
@@ -145,10 +165,12 @@ export function retryJob(job: ResearchJob) {
 
 export function useProgress() {
   const ballot = useBallot((s) => s.ballot);
+  const prefs = useBallot((s) => s.prefs);
+  const forced = useBallot((s) => s.forced);
   useBallot((s) => s.candidates);
   useBallot((s) => s.measures);
   if (!ballot) return { done: 0, total: 0, errors: 0 };
-  const jobs = listJobs(ballot).map(jobState);
+  const jobs = listJobs(ballot, prefs, forced).map(jobState);
   return {
     total: jobs.length,
     done: jobs.filter((j) => j.status === "done").length,
