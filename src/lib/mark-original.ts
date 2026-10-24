@@ -15,6 +15,17 @@ type Box = { x: number; y: number; w: number; h: number };
 export type MarkReport = { filled: number; checked: number; missing: string[] };
 
 const SCALE = 3;
+
+/** pdf.js with its worker bundled by Next (no file copying at install time). */
+async function loadPdfjs() {
+  const pdfjs = await import("pdfjs-dist");
+  if (!pdfjs.GlobalWorkerOptions.workerPort) {
+    pdfjs.GlobalWorkerOptions.workerPort = new Worker(new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url), {
+      type: "module",
+    });
+  }
+  return pdfjs;
+}
 const words = (s: string) => s.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/).filter(Boolean);
 const key = (s: string) => words(s).join("");
 
@@ -104,8 +115,7 @@ function drawCheck(page: PDFPage, x: number, y: number, size: number) {
 /** Whether the file has a text layer we can use (false for scans and photos). */
 export async function canMark(file: File): Promise<boolean> {
   if (file.type !== "application/pdf") return false;
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+  const pdfjs = await loadPdfjs();
   const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
   const text = await (await (await task.promise).getPage(1)).getTextContent();
   await task.destroy();
@@ -118,8 +128,7 @@ export async function markOriginal(
   choices: Record<string, string[]>,
 ): Promise<{ bytes: Uint8Array; report: MarkReport }> {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+  const pdfjs = await loadPdfjs();
   const task = pdfjs.getDocument({ data: bytes.slice() });
   const src = await task.promise;
   const out = await PDFDocument.load(bytes, { ignoreEncryption: true });

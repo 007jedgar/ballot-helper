@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { NoBallot } from "@/components/empty-state";
 import { Badge, Button, Spinner, buttonClass, kindLabel } from "@/components/ui";
-import { jobState, listJobs, retryJob, useProgress, type ResearchJob } from "@/lib/research";
+import { formatEta, jobState, listJobs, retryJob, useEta, useProgress, type ResearchJob } from "@/lib/research";
 import { useBallot, useHydrated } from "@/lib/store";
 
 export default function ResearchPage() {
@@ -13,6 +13,7 @@ export default function ResearchPage() {
   const paused = useBallot((s) => s.paused);
   const setPaused = useBallot((s) => s.setPaused);
   const { done, total, errors } = useProgress();
+  const { etaMs, ready } = useEta();
   if (!hydrated) return null;
   if (!ballot) return <NoBallot />;
 
@@ -46,12 +47,23 @@ export default function ResearchPage() {
         </div>
       </div>
 
-      <div className="mt-8 h-1 overflow-hidden rounded-full bg-surface-2">
+      <div className="mt-8 flex items-baseline justify-between gap-4">
+        <p className="font-mono text-[11px] text-faint">
+          {done}/{total} researched
+        </p>
+        {ready && done < total && (
+          <p className="text-[13px] tabular-nums">
+            <span className="font-medium text-fg">{pct}%</span>
+            <span className="text-muted">
+              {" · "}
+              {paused ? "paused" : etaMs != null ? formatEta(etaMs) : "estimating…"}
+            </span>
+          </p>
+        )}
+      </div>
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-2 font-mono text-[11px] text-faint">
-        {done}/{total} researched
-      </p>
 
       <ul className="mt-8 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
         {ballot.contests.map((contest) => {

@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { CandidateResearch, MeasureResearch } from "./schema";
 import { candidateKey, useBallot, type Ballot, type Contest, type Job } from "./store";
 
 const CONCURRENCY = 4;
 const inflight = new Set<string>();
+
+// Throughput for this tab's session, used for the time estimate. Resets when
+// research is paused so idle time doesn't drag the rate down.
+let sessionStart: number | null = null;
+let sessionDone = 0;
+export function resetThroughput() {
+  sessionStart = null;
+  sessionDone = 0;
+}
 
 // Requests aborted by a reload/close aren't real failures; leave them "loading"
 // so the store's rehydrate step requeues them.
@@ -46,6 +55,7 @@ async function run(job: ResearchJob, ballot: Ballot) {
     jurisdiction: ballot.jurisdiction,
   };
   inflight.add(job.key);
+  sessionStart ??= Date.now();
   try {
     if (job.kind === "measure") {
       store.setMeasureJob(job.key, { status: "loading" });
@@ -55,6 +65,7 @@ async function run(job: ResearchJob, ballot: Ballot) {
         text: job.contest.measureText,
         election,
       });
+      sessionDone++;
       useBallot.getState().setMeasureJob(job.key, { status: "done", data });
     } else {
       store.setCandidateJob(job.key, { status: "loading" });
@@ -68,6 +79,7 @@ async function run(job: ResearchJob, ballot: Ballot) {
         otherCandidates: job.contest.candidates.filter((_, i) => i !== job.index).map((o) => o.name),
         election,
       });
+      sessionDone++;
       useBallot.getState().setCandidateJob(job.key, { status: "done", data });
     }
   } catch (err) {
@@ -119,4 +131,39 @@ export function useProgress() {
     done: jobs.filter((j) => j.status === "done").length,
     errors: jobs.filter((j) => j.status === "error").length,
   };
+}
+
+const MIN_SAMPLES = 3;
+
+/**
+ * Percent complete and estimated time left, once a few items have finished
+ * this session. `etaMs` is null until there is enough data (or while paused).
+ */
+export function useEta() {
+  const { done, total, errors } = useProgress();
+  const paused = useBallot((s) => s.paused);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    if (paused) resetThroughput();
+  }, [paused]);
+
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const remaining = total - done - errors;
+  const elapsed = sessionStart ? Math.max(now - sessionStart, 1) : 0;
+  const etaMs =
+    !paused && remaining > 0 && sessionDone >= MIN_SAMPLES && elapsed ? (remaining * elapsed) / sessionDone : null;
+  return { pct, etaMs, ready: done >= MIN_SAMPLES };
+}
+
+export function formatEta(ms: number) {
+  const min = Math.round(ms / 60000);
+  if (min < 1) return "less than a minute left";
+  if (min < 60) return `about ${min} min left`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `about ${h} hr${m ? ` ${m} min` : ""} left`;
 }
