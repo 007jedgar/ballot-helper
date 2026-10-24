@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { researchStructured } from "@/lib/ai";
+import { analyzeNotes, gatherNotes } from "@/lib/ai";
 import { errorResponse } from "@/lib/http";
 import { mockEnabled, mockMeasure } from "@/lib/mock";
 import { MEASURE_STRUCTURE, RESEARCH_SYSTEM, measureTask } from "@/lib/prompts";
@@ -20,19 +20,22 @@ const Body = z.object({
       jurisdiction: z.string().nullish(),
     })
     .default({}),
+  /** Step 2: notes returned by step 1. Without them, this request gathers notes. */
+  notes: z.string().max(200_000).optional(),
 });
 
 export async function POST(req: Request) {
   const body = Body.safeParse(await req.json().catch(() => null));
   if (!body.success) return Response.json({ error: "Invalid request." }, { status: 400 });
+  const { notes, ...input } = body.data;
   try {
-    if (mockEnabled()) return Response.json({ research: await mockMeasure(body.data.title) });
-    const research = await researchStructured(MeasureResearchSchema, {
-      system: RESEARCH_SYSTEM,
-      task: measureTask(body.data),
-      structureHint: MEASURE_STRUCTURE,
-      tier: "measure",
-    });
+    if (mockEnabled()) {
+      if (!notes) return Response.json({ notes: "mock notes" });
+      return Response.json({ research: await mockMeasure(input.title) });
+    }
+    const task = measureTask(input);
+    if (!notes) return Response.json({ notes: await gatherNotes(RESEARCH_SYSTEM, task) });
+    const research = await analyzeNotes(MeasureResearchSchema, { task, notes, structureHint: MEASURE_STRUCTURE, tier: "measure" });
     return Response.json({ research });
   } catch (err) {
     return errorResponse(err);

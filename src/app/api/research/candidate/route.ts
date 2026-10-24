@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { researchStructured } from "@/lib/ai";
+import { analyzeNotes, gatherNotes } from "@/lib/ai";
 import { errorResponse } from "@/lib/http";
 import { mockCandidate, mockEnabled } from "@/lib/mock";
 import { CANDIDATE_STRUCTURE, RESEARCH_SYSTEM, candidateTask } from "@/lib/prompts";
@@ -23,21 +23,22 @@ const Body = z.object({
       jurisdiction: z.string().nullish(),
     })
     .default({}),
+  /** Step 2: notes returned by step 1. Without them, this request gathers notes. */
+  notes: z.string().max(200_000).optional(),
 });
 
 export async function POST(req: Request) {
   const body = Body.safeParse(await req.json().catch(() => null));
   if (!body.success) return Response.json({ error: "Invalid request." }, { status: 400 });
+  const { notes, ...input } = body.data;
   try {
     if (mockEnabled()) {
-      return Response.json({ research: await mockCandidate(body.data.name, body.data.party, body.data.isJudicial) });
+      if (!notes) return Response.json({ notes: "mock notes" });
+      return Response.json({ research: await mockCandidate(input.name, input.party, input.isJudicial) });
     }
-    const research = await researchStructured(CandidateResearchSchema, {
-      system: RESEARCH_SYSTEM,
-      task: candidateTask(body.data),
-      structureHint: CANDIDATE_STRUCTURE,
-      tier: "candidate",
-    });
+    const task = candidateTask(input);
+    if (!notes) return Response.json({ notes: await gatherNotes(RESEARCH_SYSTEM, task) });
+    const research = await analyzeNotes(CandidateResearchSchema, { task, notes, structureHint: CANDIDATE_STRUCTURE, tier: "candidate" });
     return Response.json({ research });
   } catch (err) {
     return errorResponse(err);

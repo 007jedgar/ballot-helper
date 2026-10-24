@@ -38,11 +38,29 @@ export function jobState(job: ResearchJob): Job<unknown> {
   return (job.kind === "measure" ? s.measures[job.key] : s.candidates[job.key]) ?? { status: "idle" };
 }
 
-async function post<T>(url: string, body: unknown): Promise<T> {
+async function postOnce(url: string, body: unknown): Promise<Record<string, unknown>> {
   const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const json = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
-  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
-  return json.research as T;
+  if (!res.ok) throw Object.assign(new Error(json.error ?? `Request failed (${res.status})`), { status: res.status });
+  return json;
+}
+
+/** Retries once on server errors and timeouts (not on bad requests). */
+async function post(url: string, body: unknown) {
+  try {
+    return await postOnce(url, body);
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (unloading || (status && status < 500)) throw err;
+    return postOnce(url, body);
+  }
+}
+
+/** Gather notes, then analyze them: two requests so each gets the full function time limit. */
+async function research<T>(url: string, input: Record<string, unknown>): Promise<T> {
+  const { notes } = await post(url, input);
+  const { research } = await post(url, { ...input, notes });
+  return research as T;
 }
 
 async function run(job: ResearchJob, ballot: Ballot) {
@@ -59,7 +77,7 @@ async function run(job: ResearchJob, ballot: Ballot) {
   try {
     if (job.kind === "measure") {
       store.setMeasureJob(job.key, { status: "loading" });
-      const data = await post<MeasureResearch>("/api/research/measure", {
+      const data = await research<MeasureResearch>("/api/research/measure", {
         title: job.contest.title,
         district: job.contest.district,
         text: job.contest.measureText,
@@ -70,7 +88,7 @@ async function run(job: ResearchJob, ballot: Ballot) {
     } else {
       store.setCandidateJob(job.key, { status: "loading" });
       const c = job.contest.candidates[job.index];
-      const data = await post<CandidateResearch>("/api/research/candidate", {
+      const data = await research<CandidateResearch>("/api/research/candidate", {
         name: c.name,
         party: c.party,
         office: job.contest.title,

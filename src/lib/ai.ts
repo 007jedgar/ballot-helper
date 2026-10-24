@@ -118,13 +118,20 @@ export async function extractFromFile<S extends z.ZodType>(
 // Web research -> structured result (two passes: research notes, then JSON)
 // ---------------------------------------------------------------------------
 
-export async function researchStructured<S extends z.ZodType>(
+/**
+ * Research is split into two steps, each its own HTTP request, so each gets
+ * the full serverless time limit: gather notes from the web, then analyze them.
+ */
+export async function gatherNotes(system: string, task: string): Promise<string> {
+  return requireProvider() === "claude" ? claudeResearch(system, task) : groqResearch(system, task);
+}
+
+export async function analyzeNotes<S extends z.ZodType>(
   schema: S,
-  opts: { system: string; task: string; structureHint: string; tier: AnalysisTier },
+  opts: { task: string; notes: string; structureHint: string; tier: AnalysisTier },
 ): Promise<z.infer<S>> {
   const provider = requireProvider();
-  const notes = provider === "claude" ? await claudeResearch(opts.system, opts.task) : await groqResearch(opts.system, opts.task);
-  const prompt = `${opts.structureHint}\n\nThe research assignment was:\n<assignment>\n${opts.task}\n</assignment>\n\nResearch notes (with source URLs):\n<notes>\n${notes}\n</notes>\n\nOnly use facts present in the notes. Use empty arrays or null where the notes have nothing.`;
+  const prompt = `${opts.structureHint}\n\nThe research assignment was:\n<assignment>\n${opts.task}\n</assignment>\n\nResearch notes (with source URLs):\n<notes>\n${opts.notes}\n</notes>\n\nOnly use facts present in the notes. Use empty arrays or null where the notes have nothing.`;
 
   if (provider === "claude") {
     const model = MODELS.analyze;
@@ -152,37 +159,54 @@ export async function researchStructured<S extends z.ZodType>(
   return parseJson(schema, res.choices[0]?.message?.content);
 }
 
+const WRITE_UP = "Stop searching now. Write your research notes from what you have already found, with source URLs.";
+
+const textOf = (content: Anthropic.Beta.BetaContentBlock[]) =>
+  content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+
 async function claudeResearch(system: string, task: string): Promise<string> {
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: task }];
-  // A long server-tool turn can pause; resume it by sending the partial turn back.
-  for (let i = 0; i < 4; i++) {
-    const res = await claude().beta.messages.create({
-      model: MODELS.research,
-      max_tokens: 16000,
-      ...fallback(MODELS.research),
-      thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
-      system,
-      tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: 8 },
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 6 },
-      ],
-      messages,
-    });
+  const tools: Anthropic.Beta.BetaToolUnion[] = [
+    { type: "web_search_20260209", name: "web_search", max_uses: 6 },
+    { type: "web_fetch_20260209", name: "web_fetch", max_uses: 4 },
+  ];
+  let writeUp = false;
+  for (let turn = 0; turn < 6; turn++) {
+    const res = await claude()
+      .beta.messages.stream({
+        model: MODELS.research,
+        max_tokens: 32000,
+        ...fallback(MODELS.research),
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+        system,
+        tools,
+        ...(writeUp ? { tool_choice: { type: "none" as const } } : {}),
+        messages,
+      })
+      .finalMessage();
+    if (res.stop_reason === "refusal") throw new Error("The model declined this research request.");
+    const text = textOf(res.content);
+
+    // A long server-tool turn can pause; it must be resumed by sending it back as-is.
     if (res.stop_reason === "pause_turn") {
       messages.push({ role: "assistant", content: res.content });
       continue;
     }
-    if (res.stop_reason === "refusal") throw new Error("The model declined this research request.");
-    const text = res.content
-      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-    if (!text) throw new Error("Research returned no content.");
-    return text;
+    // Long enough to be real notes: done (even if cut off by max_tokens).
+    if (text.length > 200 || (writeUp && text)) return text;
+    if (writeUp) break;
+
+    // Ended without writing notes (e.g. after its last search): ask for them.
+    messages.push({ role: "assistant", content: res.content });
+    messages.push({ role: "user", content: WRITE_UP });
+    writeUp = true;
   }
-  throw new Error("Research took too long. Try again.");
+  throw new Error("Research returned no content.");
 }
 
 async function groqResearch(system: string, task: string): Promise<string> {
