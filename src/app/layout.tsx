@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { ResearchRunner } from "@/components/research-runner";
+import { SupportFooterLink } from "@/components/support-card";
 import { Nav } from "@/components/nav";
 import "./globals.css";
 
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex-1">{children}</main>
         <footer className="border-t border-line py-6 text-center text-xs text-faint print:hidden">
           AI-generated summaries can be wrong. Check sources before you vote.
+          <SupportFooterLink />
         </footer>
       </body>
     </html>

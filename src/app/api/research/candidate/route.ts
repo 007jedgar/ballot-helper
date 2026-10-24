@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { analyzeNotes, gatherNotes } from "@/lib/ai";
 import { cachePath, readCache, writeCache } from "@/lib/cache";
-import { errorResponse } from "@/lib/http";
+import { costed, errorResponse } from "@/lib/http";
 import { mockCandidate, mockEnabled } from "@/lib/mock";
 import { TOPICS, isFullTopics, normalizeTopics } from "@/lib/prefs";
 import { RESEARCH_SYSTEM, candidateStructure, candidateTask, researchBudget } from "@/lib/prompts";
@@ -29,18 +29,21 @@ const Body = z.object({
     .default({}),
   /** Step 2: notes returned by step 1. Without them, this request gathers notes. */
   notes: z.string().max(200_000).optional(),
+  /** Step 2: what step 1 cost, so the cached entry records the full cost. */
+  gatherCost: z.number().min(0).max(100).nullish(),
 });
 
 export async function POST(req: Request) {
   const body = Body.safeParse(await req.json().catch(() => null));
   if (!body.success) return Response.json({ error: "Invalid request." }, { status: 400 });
-  const { notes, topics: requested, ...input } = body.data;
+  const { notes, gatherCost, topics: requested, ...input } = body.data;
   const topics = normalizeTopics(requested ?? TOPICS);
   const full = isFullTopics(topics);
   try {
     if (mockEnabled()) {
-      if (!notes) return Response.json({ notes: "mock notes" });
-      return Response.json({ research: await mockCandidate(input.name, input.party, input.isJudicial, full ? [] : topics) });
+      if (!notes) return Response.json({ notes: "mock notes", cost: 0.03 });
+      const research = await mockCandidate(input.name, input.party, input.isJudicial, full ? [] : topics);
+      return Response.json({ research, cost: 0.05 + (gatherCost ?? 0) });
     }
     // Step 1 checks the shared cache first; a hit skips both steps. A full
     // profile also satisfies a narrower request.
@@ -57,20 +60,22 @@ export async function POST(req: Request) {
     const path = full ? fullPath : cachePath("candidate", { ...identity, topics: topics.join(","), v: "2" });
     if (!notes) {
       const cached = (await readCache(path)) ?? (full ? null : await readCache(fullPath));
-      if (cached) return Response.json({ research: cached, cached: true });
+      if (cached) return Response.json({ research: cached.data, cached: true, cost: cached.cost });
     }
     const task = candidateTask(input, topics);
-    if (!notes) return Response.json({ notes: await gatherNotes(RESEARCH_SYSTEM, task, researchBudget(topics)) });
-    const research = await analyzeNotes(CandidateResearchSchema, {
+    if (!notes) return Response.json(costed("gather", await gatherNotes(RESEARCH_SYSTEM, task, researchBudget(topics)), "notes"));
+    const analyzed = await analyzeNotes(CandidateResearchSchema, {
       task,
       notes,
       structureHint: candidateStructure(topics),
       tier: "candidate",
       effort: topics.length <= 2 ? "low" : "medium",
     });
+    const research = analyzed.value;
+    const cost = analyzed.cost == null ? null : analyzed.cost + (gatherCost ?? 0);
     // Thin or uncertain results aren't worth reusing for 30 days.
-    if (research.confidence !== "low") await writeCache(path, research);
-    return Response.json({ research });
+    if (research.confidence !== "low") await writeCache(path, research, cost);
+    return Response.json({ research, cost });
   } catch (err) {
     return errorResponse(err);
   }

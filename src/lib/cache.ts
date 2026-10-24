@@ -23,24 +23,28 @@ export function cachePath(kind: "candidate" | "measure", fields: Record<string, 
   return `research/v1/${kind}/${createHash("sha256").update(canonical).digest("hex")}.json`;
 }
 
-export async function readCache<T>(path: string): Promise<T | null> {
+/** A cached result and what it cost to produce originally (null for older entries). */
+export type CacheEntry<T> = { data: T; cost: number | null };
+
+export async function readCache<T>(path: string): Promise<CacheEntry<T> | null> {
   if (!enabled()) return null;
   try {
     // Bypass the CDN so an entry refreshed after expiry is seen right away.
     const res = await get(path, { access: "private", useCache: false });
     if (!res || res.statusCode !== 200) return null;
     if (Date.now() - res.blob.uploadedAt.getTime() > TTL_MS) return null;
-    return (JSON.parse(await new Response(res.stream).text()) as { data: T }).data;
+    const entry = JSON.parse(await new Response(res.stream).text()) as { data: T; cost?: number };
+    return { data: entry.data, cost: entry.cost ?? null };
   } catch (err) {
     console.warn("research cache read failed", err);
     return null;
   }
 }
 
-export async function writeCache(path: string, data: unknown) {
+export async function writeCache(path: string, data: unknown, cost: number | null) {
   if (!enabled()) return;
   try {
-    await put(path, JSON.stringify({ data }), {
+    await put(path, JSON.stringify({ data, ...(cost != null ? { cost } : {}) }), {
       access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,

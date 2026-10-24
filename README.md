@@ -49,11 +49,16 @@ The API routes set `maxDuration = 300`, which fits within Hobby limits with Flui
 | --- | --- | --- |
 | Read the ballot file into contests | `claude-haiku-5-5` | Transcription: quick and high-volume |
 | Web research (search, fetch, take notes) | `claude-haiku-5-5` | Fact gathering, one call per candidate |
-| Candidate cards, red flags, measure analysis | `claude-opus-5-5` | Judgment and explanation |
+| Candidate cards and red-flag calls | `claude-sonnet-5-5` | Summarizing and judging well-sourced notes |
+| Ballot measure analysis | `claude-opus-5-5` | The most open-ended analysis in the app |
 
-You can override each one with `ANTHROPIC_MODEL_EXTRACT`, `ANTHROPIC_MODEL_RESEARCH` and `ANTHROPIC_MODEL_ANALYZE`. Opus requests opt into server-side refusal fallback (`fallbacks: "default"`), so a declined request is retried on a fallback model. Haiku has no server-side fallback.
+You can override each one with `ANTHROPIC_MODEL_EXTRACT`, `ANTHROPIC_MODEL_RESEARCH`, `ANTHROPIC_MODEL_ANALYZE` and `ANTHROPIC_MODEL_ANALYZE_MEASURE`. Sonnet and Opus requests opt into server-side refusal fallback (`fallbacks: "default"`); Haiku has no server-side fallback.
 
-A large county ballot can have 200+ candidates (Harris County, TX has about 220). Research runs in the background, starting with the race you're viewing, and can be paused.
+## Costs and support
+
+Every Claude call's approximate cost is computed from its token usage (list prices, plus $10 per 1,000 web searches). It's logged as `[cost] …` in the Vercel function logs, and saved with the cached research so the app knows what each ballot's research cost originally.
+
+After a voter exports their ballot, a small, dismissable card says what the AI research behind it cost and offers to "chip in". It shows once per ballot, never blocks anything, and stays hidden unless a link is configured. A "Support this project" link also appears in the footer. To turn it on, create a Stripe Payment Link with **"Let customers choose what to pay"** (suggested amount $5) and set `NEXT_PUBLIC_SUPPORT_URL`. Optionally, set `NEXT_PUBLIC_SUPPORT_URL_3/_5/_10/_20` to fixed-amount links for one-tap $3/$5/$10/$20 buttons. These are build-time variables, so redeploy after setting them. The copy calls it support, not a donation, since contributions aren't tax-deductible.
 
 ## Layout
 

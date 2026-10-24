@@ -30,6 +30,7 @@ export default function UploadPage() {
         const uploads = await prepareUploads(raw);
         const parts: BallotExtract[] = new Array(uploads.length);
         let done = 0;
+        let parseCost = 0;
         setProgress({ done, total: uploads.length });
         const readPage = async (i: number) => {
           const form = new FormData();
@@ -38,6 +39,7 @@ export default function UploadPage() {
           const json = await res.json().catch(() => ({ error: `Upload failed (${res.status})` }));
           if (!res.ok) throw new Error(uploads.length > 1 ? `Page ${i + 1}: ${json.error}` : json.error);
           parts[i] = json.ballot;
+          parseCost += typeof json.cost === "number" ? json.cost : 0;
           setProgress({ done: ++done, total: uploads.length });
         };
         // A few pages at a time keeps us under provider rate limits.
@@ -50,7 +52,7 @@ export default function UploadPage() {
         const ballot = mergeBallots(parts);
         if (!ballot.contests.length) throw new Error("No contests found. Is this a sample ballot?");
         await saveOriginal(raw);
-        setBallot(ballot, raw.name);
+        setBallot(ballot, raw.name, parseCost);
         router.push("/setup");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");

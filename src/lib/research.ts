@@ -77,11 +77,25 @@ async function post(url: string, body: unknown) {
  * function time limit. The first request returns cached research when the
  * server already has it.
  */
-async function research<T>(url: string, input: Record<string, unknown>): Promise<{ data: T; cached: boolean }> {
+type Researched<T> = { data: T; cached: boolean; cost: number | null };
+
+async function research<T>(url: string, input: Record<string, unknown>): Promise<Researched<T>> {
   const first = await post(url, input);
-  if (first.research) return { data: first.research as T, cached: true }; // served from the shared cache
-  const { research } = await post(url, { ...input, notes: first.notes });
-  return { data: research as T, cached: false };
+  const costOf = (v: unknown) => (typeof v === "number" ? v : null);
+  // Served from the shared cache; `cost` is what it originally cost to research.
+  if (first.research) return { data: first.research as T, cached: true, cost: costOf(first.cost) };
+  const second = await post(url, { ...input, notes: first.notes, gatherCost: costOf(first.cost) });
+  return { data: second.research as T, cached: false, cost: costOf(second.cost) };
+}
+
+/** Approximate USD of AI work behind the current ballot (reading it plus research). */
+export function useBallotCost() {
+  const parseCost = useBallot((s) => s.parseCost);
+  const candidates = useBallot((s) => s.candidates);
+  const measures = useBallot((s) => s.measures);
+  let total = parseCost;
+  for (const j of [...Object.values(candidates), ...Object.values(measures)]) total += j.cost ?? 0;
+  return total;
 }
 
 async function run(job: ResearchJob, ballot: Ballot) {
@@ -98,7 +112,7 @@ async function run(job: ResearchJob, ballot: Ballot) {
   try {
     if (job.kind === "measure") {
       store.setMeasureJob(job.key, { status: "loading" });
-      const { data, cached } = await research<MeasureResearch>("/api/research/measure", {
+      const { data, cached, cost } = await research<MeasureResearch>("/api/research/measure", {
         title: job.contest.title,
         district: job.contest.district,
         text: job.contest.measureText,
@@ -106,11 +120,11 @@ async function run(job: ResearchJob, ballot: Ballot) {
       });
       // Instant cache hits would make the time estimate wildly optimistic.
       if (!cached) sessionDone++;
-      useBallot.getState().setMeasureJob(job.key, { status: "done", data });
+      useBallot.getState().setMeasureJob(job.key, { status: "done", data, cost });
     } else {
       store.setCandidateJob(job.key, { status: "loading" });
       const c = job.contest.candidates[job.index];
-      const { data, cached } = await research<CandidateResearch>("/api/research/candidate", {
+      const { data, cached, cost } = await research<CandidateResearch>("/api/research/candidate", {
         name: c.name,
         party: c.party,
         office: job.contest.title,
@@ -123,7 +137,7 @@ async function run(job: ResearchJob, ballot: Ballot) {
       });
       // Instant cache hits would make the time estimate wildly optimistic.
       if (!cached) sessionDone++;
-      useBallot.getState().setCandidateJob(job.key, { status: "done", data });
+      useBallot.getState().setCandidateJob(job.key, { status: "done", data, cost });
     }
   } catch (err) {
     if (unloading) return;

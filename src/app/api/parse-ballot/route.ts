@@ -1,5 +1,5 @@
 import { extractFromFile } from "@/lib/ai";
-import { errorResponse } from "@/lib/http";
+import { costed, errorResponse } from "@/lib/http";
 import { mockBallot, mockEnabled } from "@/lib/mock";
 import { BALLOT_EXTRACTION } from "@/lib/prompts";
 import { BallotSchema } from "@/lib/schema";
@@ -16,10 +16,10 @@ export async function POST(req: Request) {
     if (!ALLOWED.includes(file.type)) {
       return Response.json({ error: "Upload a PDF, JPG, PNG, or WebP." }, { status: 400 });
     }
-    if (mockEnabled()) return Response.json({ ballot: await mockBallot() });
+    if (mockEnabled()) return Response.json({ ballot: await mockBallot(), cost: 0.004 });
     const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-    const ballot = await extractFromFile(BallotSchema, { mediaType: file.type, base64 }, BALLOT_EXTRACTION);
-    return Response.json({ ballot });
+    const result = await extractFromFile(BallotSchema, { mediaType: file.type, base64 }, BALLOT_EXTRACTION);
+    return Response.json(costed("extract", result, "ballot"));
   } catch (err) {
     return errorResponse(err);
   }

@@ -11,7 +11,13 @@ import type { ShareSnapshot } from "./share-schema";
 export type Contest = Omit<ContestExtract, "category"> & Partial<Pick<ContestExtract, "category">> & { id: string; page?: number };
 export type Ballot = Omit<BallotExtract, "contests"> & { contests: Contest[] };
 
-export type Job<T> = { status: "idle" | "loading" | "done" | "error"; data?: T; error?: string };
+export type Job<T> = {
+  status: "idle" | "loading" | "done" | "error";
+  data?: T;
+  error?: string;
+  /** Approximate USD the research cost to produce (its original cost when served from cache). */
+  cost?: number | null;
+};
 
 export const candidateKey = (contestId: string, index: number) => `${contestId}::${index}`;
 
@@ -30,7 +36,16 @@ type State = {
   prefsConfirmed: boolean;
   /** Contests the voter asked to research despite their preferences. */
   forced: Record<string, true>;
-  setBallot: (ballot: Omit<BallotExtract, "contests"> & { contests: Omit<Contest, "id">[] }, fileName: string) => void;
+  /** Approximate USD spent reading the ballot file. */
+  parseCost: number;
+  /** The voter exported this ballot (shows the support card), and whether they closed that card. */
+  exported: boolean;
+  supportDismissed: boolean;
+  setBallot: (
+    ballot: Omit<BallotExtract, "contests"> & { contests: Omit<Contest, "id">[] },
+    fileName: string,
+    parseCost?: number,
+  ) => void;
   importShare: (share: ShareSnapshot) => void;
   removeContest: (id: string) => void;
   setCandidateJob: (key: string, job: Job<CandidateResearch>) => void;
@@ -43,6 +58,8 @@ type State = {
   forceContest: (id: string) => void;
   /** Selects `party`'s candidates in every partisan race; returns how many races were filled. */
   applyStraightTicket: (party: Party) => number;
+  markExported: () => void;
+  dismissSupport: () => void;
   reset: () => void;
 };
 
@@ -57,6 +74,9 @@ const empty = {
   showFlags: true,
   prefsConfirmed: false,
   forced: {},
+  parseCost: 0,
+  exported: false,
+  supportDismissed: false,
 };
 
 export const useBallot = create<State>()(
@@ -64,11 +84,12 @@ export const useBallot = create<State>()(
     (set, get) => ({
       ...empty,
       prefs: DEFAULT_PREFS,
-      setBallot: (ballot, fileName) =>
+      setBallot: (ballot, fileName, parseCost = 0) =>
         set((s) => ({
           ...empty,
           showFlags: s.showFlags,
           fileName,
+          parseCost,
           ballot: { ...ballot, contests: ballot.contests.map((c, i) => ({ ...c, id: `c${i}` })) },
         })),
       importShare: (share) =>
@@ -113,6 +134,8 @@ export const useBallot = create<State>()(
         set((s) => ({ choices: { ...s.choices, ...picks } }));
         return Object.keys(picks).length;
       },
+      markExported: () => set({ exported: true }),
+      dismissSupport: () => set({ supportDismissed: true }),
       // Keep the red-flag preference across ballots.
       reset: () => set((s) => ({ ...empty, showFlags: s.showFlags })),
     }),

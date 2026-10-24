@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { analyzeNotes, gatherNotes } from "@/lib/ai";
 import { cachePath, readCache, writeCache } from "@/lib/cache";
-import { errorResponse } from "@/lib/http";
+import { costed, errorResponse } from "@/lib/http";
 import { mockEnabled, mockMeasure } from "@/lib/mock";
 import { MEASURE_STRUCTURE, RESEARCH_SYSTEM, measureTask } from "@/lib/prompts";
 import { MeasureResearchSchema } from "@/lib/schema";
@@ -23,16 +23,18 @@ const Body = z.object({
     .default({}),
   /** Step 2: notes returned by step 1. Without them, this request gathers notes. */
   notes: z.string().max(200_000).optional(),
+  /** Step 2: what step 1 cost, so the cached entry records the full cost. */
+  gatherCost: z.number().min(0).max(100).nullish(),
 });
 
 export async function POST(req: Request) {
   const body = Body.safeParse(await req.json().catch(() => null));
   if (!body.success) return Response.json({ error: "Invalid request." }, { status: 400 });
-  const { notes, ...input } = body.data;
+  const { notes, gatherCost, ...input } = body.data;
   try {
     if (mockEnabled()) {
-      if (!notes) return Response.json({ notes: "mock notes" });
-      return Response.json({ research: await mockMeasure(input.title) });
+      if (!notes) return Response.json({ notes: "mock notes", cost: 0.03 });
+      return Response.json({ research: await mockMeasure(input.title), cost: 0.05 + (gatherCost ?? 0) });
     }
     // Step 1 checks the shared cache first; a hit skips both steps.
     const path = cachePath("measure", {
@@ -45,18 +47,20 @@ export async function POST(req: Request) {
     });
     if (!notes) {
       const cached = await readCache(path);
-      if (cached) return Response.json({ research: cached, cached: true });
+      if (cached) return Response.json({ research: cached.data, cached: true, cost: cached.cost });
     }
     const task = measureTask(input);
-    if (!notes) return Response.json({ notes: await gatherNotes(RESEARCH_SYSTEM, task) });
-    const research = await analyzeNotes(MeasureResearchSchema, {
+    if (!notes) return Response.json(costed("gather", await gatherNotes(RESEARCH_SYSTEM, task), "notes"));
+    const analyzed = await analyzeNotes(MeasureResearchSchema, {
       task,
       notes,
       structureHint: MEASURE_STRUCTURE,
       tier: "measure",
     });
-    if (research.confidence !== "low") await writeCache(path, research);
-    return Response.json({ research });
+    const research = analyzed.value;
+    const cost = analyzed.cost == null ? null : analyzed.cost + (gatherCost ?? 0);
+    if (research.confidence !== "low") await writeCache(path, research, cost);
+    return Response.json({ research, cost });
   } catch (err) {
     return errorResponse(err);
   }

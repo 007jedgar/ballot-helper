@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import Groq from "groq-sdk";
 import { z } from "zod";
+import { costOf } from "./cost";
 
 /**
  * Provider-agnostic helpers. Claude is used when ANTHROPIC_API_KEY is set,
@@ -29,14 +30,19 @@ function requireProvider(): Provider {
 
 /**
  * Claude models by job. Haiku does the quick, high-volume pulling work
- * (transcribing the ballot, searching the web and taking notes). Opus does
- * the judgment work: deciding what matters, red flags, and measure analysis.
+ * (transcribing the ballot, searching the web and taking notes). Sonnet turns
+ * candidate notes into profiles and red-flag calls; Opus writes the measure
+ * analysis, the most open-ended judgment in the app.
  */
 const MODELS = {
   extract: process.env.ANTHROPIC_MODEL_EXTRACT || "claude-haiku-5-5",
   research: process.env.ANTHROPIC_MODEL_RESEARCH || "claude-haiku-5-5",
-  analyze: process.env.ANTHROPIC_MODEL_ANALYZE || "claude-opus-5-5",
+  analyze: process.env.ANTHROPIC_MODEL_ANALYZE || "claude-sonnet-5-5",
+  analyzeMeasure: process.env.ANTHROPIC_MODEL_ANALYZE_MEASURE || "claude-opus-5-5",
 };
+
+/** A model result plus its approximate cost in USD (null when unknown, e.g. Groq). */
+export type Costed<T> = { value: T; cost: number | null };
 /** Measures get more analysis effort than candidate profiles. */
 export type AnalysisTier = "candidate" | "measure";
 const GROQ_RESEARCH_MODEL = process.env.GROQ_RESEARCH_MODEL || "groq/compound";
@@ -66,7 +72,7 @@ export async function extractFromFile<S extends z.ZodType>(
   schema: S,
   file: UploadedFile,
   instructions: string,
-): Promise<z.infer<S>> {
+): Promise<Costed<z.infer<S>>> {
   const provider = requireProvider();
 
   if (provider === "claude") {
@@ -91,7 +97,7 @@ export async function extractFromFile<S extends z.ZodType>(
     });
     if (res.stop_reason === "refusal") throw new Error("The model declined to process this file.");
     if (!res.parsed_output) throw new Error("Could not read the ballot. Try a clearer scan.");
-    return res.parsed_output as z.infer<S>;
+    return { value: res.parsed_output as z.infer<S>, cost: costOf(res.model, res.usage) };
   }
 
   if (file.mediaType === "application/pdf") {
@@ -111,7 +117,7 @@ export async function extractFromFile<S extends z.ZodType>(
       },
     ],
   });
-  return parseJson(schema, res.choices[0]?.message?.content);
+  return { value: parseJson(schema, res.choices[0]?.message?.content), cost: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -125,19 +131,20 @@ export async function extractFromFile<S extends z.ZodType>(
 export type SearchBudget = { searches: number; fetches: number };
 const DEFAULT_BUDGET: SearchBudget = { searches: 6, fetches: 4 };
 
-export async function gatherNotes(system: string, task: string, budget: SearchBudget = DEFAULT_BUDGET): Promise<string> {
-  return requireProvider() === "claude" ? claudeResearch(system, task, budget) : groqResearch(system, task);
+export async function gatherNotes(system: string, task: string, budget: SearchBudget = DEFAULT_BUDGET): Promise<Costed<string>> {
+  if (requireProvider() === "claude") return claudeResearch(system, task, budget);
+  return { value: await groqResearch(system, task), cost: null };
 }
 
 export async function analyzeNotes<S extends z.ZodType>(
   schema: S,
   opts: { task: string; notes: string; structureHint: string; tier: AnalysisTier; effort?: "low" | "medium" | "high" },
-): Promise<z.infer<S>> {
+): Promise<Costed<z.infer<S>>> {
   const provider = requireProvider();
   const prompt = `${opts.structureHint}\n\nThe research assignment was:\n<assignment>\n${opts.task}\n</assignment>\n\nResearch notes (with source URLs):\n<notes>\n${opts.notes}\n</notes>\n\nOnly use facts present in the notes. Use empty arrays or null where the notes have nothing.`;
 
   if (provider === "claude") {
-    const model = MODELS.analyze;
+    const model = opts.tier === "measure" ? MODELS.analyzeMeasure : MODELS.analyze;
     const res = await claude().beta.messages.parse({
       model,
       max_tokens: 16000,
@@ -147,7 +154,7 @@ export async function analyzeNotes<S extends z.ZodType>(
       messages: [{ role: "user", content: prompt }],
     });
     if (!res.parsed_output) throw new Error("Could not structure the research results.");
-    return res.parsed_output as z.infer<S>;
+    return { value: res.parsed_output as z.infer<S>, cost: costOf(res.model, res.usage) };
   }
 
   const res = await groq().chat.completions.create({
@@ -159,7 +166,7 @@ export async function analyzeNotes<S extends z.ZodType>(
     },
     messages: [{ role: "user", content: prompt }],
   });
-  return parseJson(schema, res.choices[0]?.message?.content);
+  return { value: parseJson(schema, res.choices[0]?.message?.content), cost: null };
 }
 
 const WRITE_UP = "Stop searching now. Write your research notes from what you have already found, with source URLs.";
@@ -181,7 +188,7 @@ const textOf = (content: Anthropic.Beta.BetaContentBlock[]) =>
     .join("\n")
     .trim();
 
-async function claudeResearch(system: string, task: string, budget: SearchBudget): Promise<string> {
+async function claudeResearch(system: string, task: string, budget: SearchBudget): Promise<Costed<string>> {
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: task }];
   const tools: Anthropic.Beta.BetaToolUnion[] = [
     { type: "web_search_20260209", name: "web_search", max_uses: budget.searches },
@@ -189,6 +196,7 @@ async function claudeResearch(system: string, task: string, budget: SearchBudget
   ];
   let writeUp = false;
   let found = 0;
+  let cost = 0;
   for (let turn = 0; turn < 6; turn++) {
     const res = await claude()
       .beta.messages.stream({
@@ -205,6 +213,7 @@ async function claudeResearch(system: string, task: string, budget: SearchBudget
       .finalMessage();
     if (res.stop_reason === "refusal") throw new Error("The model declined this research request.");
     found += lookupsFound(res.content);
+    cost += costOf(res.model, res.usage);
     const text = textOf(res.content);
 
     // A long server-tool turn can pause; it must be resumed by sending it back as-is.
@@ -218,7 +227,7 @@ async function claudeResearch(system: string, task: string, budget: SearchBudget
       throw new ResearchFailedError("Web search didn't return results for this candidate. Try again.");
     }
     // Long enough to be real notes: done (even if cut off by max_tokens).
-    if (text.length > 200 || (writeUp && text)) return text;
+    if (text.length > 200 || (writeUp && text)) return { value: text, cost };
     if (writeUp) break;
 
     // Ended without writing notes (e.g. after its last search): ask for them.

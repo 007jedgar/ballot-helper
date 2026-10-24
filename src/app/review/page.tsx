@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NoBallot } from "@/components/empty-state";
 import { ShareButton } from "@/components/share-button";
+import { SupportCard } from "@/components/support-card";
 import { Button } from "@/components/ui";
 import { exportBallotPdf } from "@/lib/export-pdf";
 import { loadOriginal } from "@/lib/file-store";
@@ -17,6 +18,7 @@ export default function ReviewPage() {
   const ballot = useBallot((s) => s.ballot);
   const choices = useBallot((s) => s.choices);
   const setStep = useBallot((s) => s.setStep);
+  const markExported = useBallot((s) => s.markExported);
   const [busy, setBusy] = useState(false);
   const [original, setOriginal] = useState<File | null>(null);
   const [marking, setMarking] = useState(false);
@@ -41,6 +43,7 @@ export default function ReviewPage() {
   const made = ballot.contests.filter((c) => (choices[c.id] ?? []).length).length;
 
   const save = (bytes: Uint8Array, name: string) => {
+    markExported();
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
     const a = document.createElement("a");
     a.href = url;
@@ -84,7 +87,14 @@ export default function ReviewPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <ShareButton />
-          <Button onClick={() => window.print()}>Print</Button>
+          <Button
+            onClick={() => {
+              markExported();
+              window.print();
+            }}
+          >
+            Print
+          </Button>
           <Button variant={original ? "secondary" : "primary"} onClick={download} disabled={busy}>
             Download PDF
           </Button>
@@ -151,6 +161,8 @@ export default function ReviewPage() {
           )}
         </div>
       )}
+
+      <SupportCard />
 
       <div className="rounded-xl bg-white p-6 text-[#16171a] shadow-[0_0_0_1px_rgb(255_255_255/0.1)] sm:p-10 print:rounded-none print:p-0 print:shadow-none">
         <h2 className="text-xl font-semibold tracking-tight">My Sample Ballot</h2>
