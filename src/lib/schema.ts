@@ -66,6 +66,22 @@ export const CandidateResearchSchema = z.object({
   criticisms: z
     .array(z.string())
     .describe("Substantive criticisms, controversies, or weaknesses raised by opponents, press, or watchdogs"),
+  redFlags: z
+    .array(
+      z.object({
+        kind: z
+          .enum(["conflict_of_interest", "conviction", "impeachment", "ethics_violation"])
+          .describe(
+            "conflict_of_interest = personal/financial/organizational ties that clash with the duties of THIS office; conviction = criminal conviction for a serious offense; impeachment = impeached or removed from office; ethics_violation = formal finding by an ethics body, court, or bar while holding power",
+          ),
+        title: z.string().describe("Short label, e.g. 'Owns oil drilling company' or 'Convicted of bribery (2019)'"),
+        explanation: z
+          .string()
+          .describe("1-2 sentences: the documented facts and why they conflict with or bear on this specific office"),
+        sourceUrl: z.string().nullable(),
+      }),
+    )
+    .describe("Only documented, verifiable red flags with a source. Empty if none. Never include rumors or mere accusations."),
   news: z
     .array(z.object({ title: z.string(), source: z.string(), date: z.string().nullable(), url: z.string() }))
     .describe("Up to 5 recent relevant articles"),

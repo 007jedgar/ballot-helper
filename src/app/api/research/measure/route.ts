@@ -31,6 +31,7 @@ export async function POST(req: Request) {
       system: RESEARCH_SYSTEM,
       task: measureTask(body.data),
       structureHint: MEASURE_STRUCTURE,
+      tier: "measure",
     });
     return Response.json({ research });
   } catch (err) {

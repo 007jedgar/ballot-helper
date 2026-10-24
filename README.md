@@ -5,6 +5,7 @@ Upload your sample ballot and get nonpartisan research on every race and measure
 - **Upload** a PDF, screenshot, or photo. AI reads every contest (multi-page PDFs are split and read page by page).
 - **Research.** For each candidate, the app searches Ballotpedia, their campaign site and socials, endorsements, and news coverage. Each card lists qualifications for the office (for judges: law degree, bar admission, and experience), positions, endorsements, criticisms, and, for incumbents, their record in office. Age is shown only when it's over 60, and appearance is never described.
 - **Measures** get a plain-English summary, what happens if they pass or fail, fiscal impact, arguments on both sides, and a critical analysis.
+- **Red flags** (toggleable): a red flag next to a candidate's name marks a documented conflict of interest with the office they're running for (e.g. an oil company owner running to regulate oil, a private religious school board member running for public school board), a serious criminal conviction, an impeachment, or a formal ethics finding. An explanation and a source come with each one.
 - **Compare** races side by side and pick. Use ← / → to move between contests. Research runs in the background, starting with the race you're viewing, and can be paused.
 - **Export** a PDF of your sample ballot with your choices checked, or print it.
 
@@ -32,15 +33,17 @@ To work on the UI without an API key, run with fixture data: `MOCK_AI=1 npm run 
 
 The API routes set `maxDuration = 300`, which fits within Hobby limits with Fluid Compute (on by default).
 
-## Cost notes
+## Models
 
-Each candidate takes one research call (web search and fetch) plus a small call to structure the results. Measures work the same way. A large county ballot can have 200+ candidates (Harris County, TX has about 220), so with the default `claude-opus-5-5` model a full ballot can cost tens of dollars in API usage. To reduce it:
+| Job | Default model | Why |
+| --- | --- | --- |
+| Read the ballot file into contests | `claude-haiku-5-5` | Transcription: quick and high-volume |
+| Web research (search, fetch, take notes) | `claude-haiku-5-5` | Fact gathering, one call per candidate |
+| Candidate cards, red flags, measure analysis | `claude-opus-5-5` | Judgment and explanation |
 
-- set `ANTHROPIC_MODEL=claude-sonnet-5-5` (or `claude-haiku-5-5`),
-- use Groq instead, or
-- pause research and let it run only for the races you open in the wizard (it always researches the race you're viewing first).
+You can override each one with `ANTHROPIC_MODEL_EXTRACT`, `ANTHROPIC_MODEL_RESEARCH` and `ANTHROPIC_MODEL_ANALYZE`. Opus requests opt into server-side refusal fallback (`fallbacks: "default"`), so a declined request is retried on a fallback model. Haiku has no server-side fallback.
 
-Claude requests opt into server-side refusal fallback (`fallbacks: "default"`), so a declined request is retried on a fallback model instead of failing.
+A large county ballot can have 200+ candidates (Harris County, TX has about 220). Research runs in the background, starting with the race you're viewing, and can be paused.
 
 ## Layout
 

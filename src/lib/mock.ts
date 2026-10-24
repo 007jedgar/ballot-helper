@@ -60,6 +60,26 @@ export async function mockCandidate(name: string, party: string | null | undefin
     endorsements: ["Ohio AFL-CIO", "Columbus Dispatch editorial board", "Fraternal Order of Police Lodge 9", "Sierra Club Ohio"],
     accomplishments: incumbent ? ["Sponsored 2023 housing trust fund ($50M)", "Led audit that recovered $3.2M in overpayments"] : [],
     criticisms: ["Missed 18% of votes in 2025 session", "Accepted donations from contractors later awarded city work (Dispatch, 2025)"],
+    redFlags:
+      seed % 3 === 0
+        ? [
+            {
+              kind: "conflict_of_interest",
+              title: "Owns stake in regional oil & gas producer",
+              explanation: "Holds a 30% stake in Buckeye Energy LLC, which the office would regulate through permitting decisions.",
+              sourceUrl: "https://example.com/disclosure",
+            },
+          ]
+        : seed % 5 === 0
+          ? [
+              {
+                kind: "conviction",
+                title: "Convicted of misuse of public funds (2014)",
+                explanation: "Pleaded guilty while serving as county treasurer to diverting $40K to a personal account.",
+                sourceUrl: null,
+              },
+            ]
+          : [],
     news: [{ title: `${name} unveils budget plan`, source: "Columbus Dispatch", date: "2026-10-02", url: "https://example.com/news" }],
     website: "https://example.com",
     ballotpedia: `https://ballotpedia.org/${encodeURIComponent(name.replace(/ /g, "_"))}`,

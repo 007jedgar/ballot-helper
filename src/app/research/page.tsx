@@ -38,7 +38,7 @@ export default function ResearchPage() {
                 : "All research complete."}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           {done < total && <Button onClick={() => setPaused(!paused)}>{paused ? "Resume" : "Pause"}</Button>}
           <Link href="/compare" className={buttonClass("primary")}>
             Start comparing →

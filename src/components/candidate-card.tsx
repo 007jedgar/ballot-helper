@@ -3,7 +3,7 @@
 import type { CandidateResearch } from "@/lib/schema";
 import type { Job } from "@/lib/store";
 import { Bullets } from "./bullets";
-import { Badge, Button } from "./ui";
+import { Badge, Button, FlagIcon } from "./ui";
 
 export function CandidateCard({
   name,
@@ -14,6 +14,7 @@ export function CandidateCard({
   onSelect,
   onRetry,
   selectable = true,
+  showFlags,
 }: {
   name: string;
   party: string | null;
@@ -23,8 +24,11 @@ export function CandidateCard({
   onSelect: () => void;
   onRetry: () => void;
   selectable?: boolean;
+  showFlags: boolean;
 }) {
   const r = job.data;
+  // Research cached before red flags existed has no field.
+  const flags = showFlags ? (r?.redFlags ?? []) : [];
   return (
     <article
       className={`flex flex-col rounded-xl border bg-surface transition-colors ${
@@ -34,7 +38,20 @@ export function CandidateCard({
       <header className="border-b border-line p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold tracking-tight">{name}</h3>
+            <h3 className="flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+              {name}
+              {flags.length > 0 && (
+                <a
+                  href={`#flags-${slug(name)}`}
+                  title={flags.map((f) => f.title).join("\n")}
+                  className="inline-flex items-center gap-0.5 text-bad"
+                >
+                  <FlagIcon />
+                  {flags.length > 1 && <span className="font-mono text-[11px]">{flags.length}</span>}
+                  <span className="sr-only">{flags.length} red flag{flags.length > 1 ? "s" : ""}</span>
+                </a>
+              )}
+            </h3>
             <p className="text-[13px] text-muted">{r?.party ?? party ?? "Nonpartisan"}</p>
           </div>
           {selected && <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent text-[11px]">✓</span>}
@@ -55,6 +72,7 @@ export function CandidateCard({
         {job.status === "done" && r ? (
           <>
             <p className="text-[13px] leading-relaxed text-muted">{r.oneLiner}</p>
+            {flags.length > 0 && <RedFlags id={`flags-${slug(name)}`} flags={flags} />}
             <Bullets title="Qualifications" items={r.qualifications} />
             <Bullets title="Positions" items={r.keyPositions} />
             {r.isIncumbent && <Bullets title="Record in office" items={r.accomplishments} tone="good" />}
@@ -87,6 +105,37 @@ export function CandidateCard({
         </footer>
       )}
     </article>
+  );
+}
+
+const FLAG_LABEL: Record<CandidateResearch["redFlags"][number]["kind"], string> = {
+  conflict_of_interest: "Conflict of interest",
+  conviction: "Criminal conviction",
+  impeachment: "Impeachment",
+  ethics_violation: "Ethics violation",
+};
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+function RedFlags({ id, flags }: { id: string; flags: CandidateResearch["redFlags"] }) {
+  return (
+    <div id={id} className="scroll-mt-24 space-y-3 rounded-lg border border-bad/30 bg-bad/[0.06] p-3">
+      {flags.map((f, i) => (
+        <div key={i} className="flex gap-2.5">
+          <FlagIcon className="mt-0.5 shrink-0 text-bad" />
+          <div className="min-w-0 text-[13px] leading-snug">
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-bad/90">{FLAG_LABEL[f.kind]}</p>
+            <p className="mt-0.5 font-medium text-fg">{f.title}</p>
+            <p className="mt-1 text-fg/75">{f.explanation}</p>
+            {f.sourceUrl && (
+              <a href={f.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[12px] text-muted hover:text-fg">
+                Source ↗
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

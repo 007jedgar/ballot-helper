@@ -27,14 +27,29 @@ function requireProvider(): Provider {
   return p;
 }
 
-const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
+/**
+ * Claude models by job. Haiku does the quick, high-volume pulling work
+ * (transcribing the ballot, searching the web and taking notes). Opus does
+ * the judgment work: deciding what matters, red flags, and measure analysis.
+ */
+const MODELS = {
+  extract: process.env.ANTHROPIC_MODEL_EXTRACT || "claude-haiku-5-5",
+  research: process.env.ANTHROPIC_MODEL_RESEARCH || "claude-haiku-5-5",
+  analyze: process.env.ANTHROPIC_MODEL_ANALYZE || "claude-opus-5-5",
+};
+/** Measures get more analysis effort than candidate profiles. */
+export type AnalysisTier = "candidate" | "measure";
 const GROQ_RESEARCH_MODEL = process.env.GROQ_RESEARCH_MODEL || "groq/compound";
 const GROQ_STRUCT_MODEL = process.env.GROQ_STRUCT_MODEL || "openai/gpt-oss-120b";
 const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
 
 // Server-side refusal fallback: if the model declines, the API reruns the
-// request on a fallback model chosen by refusal category.
-const FALLBACK_BETA = "server-side-fallback-2026-07-01";
+// request on a fallback model chosen by refusal category. Haiku has no
+// server-side fallback, so it gets neither the beta nor the parameter.
+const fallback = (model: string) =>
+  /^claude-(opus-5|sonnet-5-5|fable-5-1)/.test(model)
+    ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
+    : {};
 
 let anthropic: Anthropic | null = null;
 const claude = () => (anthropic ??= new Anthropic());
@@ -67,10 +82,9 @@ export async function extractFromFile<S extends z.ZodType>(
             },
           };
     const res = await claude().beta.messages.parse({
-      model: CLAUDE_MODEL,
+      model: MODELS.extract,
       max_tokens: 16000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...fallback(MODELS.extract),
       thinking: { type: "adaptive" },
       output_config: { effort: "medium", format: betaZodOutputFormat(schema) },
       messages: [{ role: "user", content: [fileBlock, { type: "text", text: instructions }] }],
@@ -106,20 +120,20 @@ export async function extractFromFile<S extends z.ZodType>(
 
 export async function researchStructured<S extends z.ZodType>(
   schema: S,
-  opts: { system: string; task: string; structureHint: string },
+  opts: { system: string; task: string; structureHint: string; tier: AnalysisTier },
 ): Promise<z.infer<S>> {
   const provider = requireProvider();
   const notes = provider === "claude" ? await claudeResearch(opts.system, opts.task) : await groqResearch(opts.system, opts.task);
-  const prompt = `${opts.structureHint}\n\nResearch notes (with source URLs):\n<notes>\n${notes}\n</notes>\n\nOnly use facts present in the notes. Use empty arrays or null where the notes have nothing.`;
+  const prompt = `${opts.structureHint}\n\nThe research assignment was:\n<assignment>\n${opts.task}\n</assignment>\n\nResearch notes (with source URLs):\n<notes>\n${notes}\n</notes>\n\nOnly use facts present in the notes. Use empty arrays or null where the notes have nothing.`;
 
   if (provider === "claude") {
+    const model = MODELS.analyze;
     const res = await claude().beta.messages.parse({
-      model: CLAUDE_MODEL,
+      model,
       max_tokens: 16000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...fallback(model),
       thinking: { type: "adaptive" },
-      output_config: { effort: "low", format: betaZodOutputFormat(schema) },
+      output_config: { effort: opts.tier === "measure" ? "high" : "medium", format: betaZodOutputFormat(schema) },
       messages: [{ role: "user", content: prompt }],
     });
     if (!res.parsed_output) throw new Error("Could not structure the research results.");
@@ -143,10 +157,9 @@ async function claudeResearch(system: string, task: string): Promise<string> {
   // A long server-tool turn can pause; resume it by sending the partial turn back.
   for (let i = 0; i < 4; i++) {
     const res = await claude().beta.messages.create({
-      model: CLAUDE_MODEL,
+      model: MODELS.research,
       max_tokens: 16000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...fallback(MODELS.research),
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
       system,

@@ -36,7 +36,8 @@ Rules:
 - Be balanced. Give real criticisms as well as strengths, attributed to who made them.
 - Never describe physical appearance. Don't speculate about personal life.
 - Cite the URL next to each fact in your notes.
-- Be concise. Notes, not prose.`;
+- Be concise. Notes, not prose.
+- You are gathering facts for an analyst who will make the judgment calls. Record what sources say, including anything that could matter for conflicts of interest or misconduct; don't editorialize or decide what is a red flag.`;
 
 export function candidateTask(p: {
   name: string;
@@ -66,10 +67,16 @@ Find and note:
 5. Notable endorsements.
 6. Criticisms raised by opponents, press, or watchdogs.
 7. Up to 5 recent relevant news articles (title, outlet, date, URL).
-8. Their date of birth or age, if published.`;
+8. Their date of birth or age, if published.
+9. Red flags, with sources:
+   - Conflicts of interest with THIS office: businesses they own or lead, board seats, employers, major investments, or close family ties that the office would regulate, fund, contract with, or compete against (e.g. an oil company owner running for a seat that regulates oil and gas; a board member of private religious schools running for public school board).
+   - Criminal convictions for serious offenses, especially while in a position of power.
+   - Impeachments or removals from office.
+   - Formal ethics findings or sanctions (ethics commission, judicial conduct commission, state bar discipline).
+   Only include what reliable sources document. Note pending charges as pending; don't treat mere accusations as findings.`;
 }
 
-export const CANDIDATE_STRUCTURE = `Convert the research notes into the candidate profile schema. Each bullet: one short, specific line (aim for under 20 words). Prefer specifics (numbers, years, names) over adjectives. If notes are thin or ambiguous about identity, set confidence to "low".`;
+export const CANDIDATE_STRUCTURE = `Convert the research notes into the candidate profile schema. Each bullet: one short, specific line (aim for under 20 words). Prefer specifics (numbers, years, names) over adjectives. If notes are thin or ambiguous about identity, set confidence to "low". redFlags: include only documented items from the notes (pending charges may be included if the title says "pending"); never infer a conflict from party affiliation or ideology alone.`;
 
 export function measureTask(p: { title: string; district?: string | null; text?: string | null; election: ElectionContext }): string {
   return `Research this ballot measure for ${describeElection(p.election)}:

@@ -36,6 +36,7 @@ export async function POST(req: Request) {
       system: RESEARCH_SYSTEM,
       task: candidateTask(body.data),
       structureHint: CANDIDATE_STRUCTURE,
+      tier: "candidate",
     });
     return Response.json({ research });
   } catch (err) {

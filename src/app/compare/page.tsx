@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { CandidateCard } from "@/components/candidate-card";
 import { NoBallot } from "@/components/empty-state";
 import { MeasurePanel } from "@/components/measure-panel";
-import { Badge, Button, buttonClass, kindLabel } from "@/components/ui";
+import { Badge, Button, FlagIcon, Toggle, buttonClass, kindLabel } from "@/components/ui";
 import { retryJob } from "@/lib/research";
 import { candidateKey, useBallot, useHydrated, type Contest } from "@/lib/store";
 
@@ -17,6 +17,9 @@ export default function ComparePage() {
   const rawStep = useBallot((s) => s.step);
   const setStep = useBallot((s) => s.setStep);
   const choices = useBallot((s) => s.choices);
+  const showFlags = useBallot((s) => s.showFlags);
+  const setShowFlags = useBallot((s) => s.setShowFlags);
+  const candidates = useBallot((s) => s.candidates);
 
   const count = ballot?.contests.length ?? 0;
   const step = Math.min(Math.max(rawStep, 0), Math.max(count - 1, 0));
@@ -50,6 +53,8 @@ export default function ComparePage() {
         <ol className="space-y-0.5">
           {ballot.contests.map((c, i) => {
             const picked = (choices[c.id] ?? []).length > 0;
+            const flagged =
+              showFlags && c.candidates.some((_, j) => (candidates[candidateKey(c.id, j)]?.data?.redFlags ?? []).length > 0);
             return (
               <li key={c.id}>
                 <button
@@ -66,6 +71,7 @@ export default function ComparePage() {
                     {picked && "✓"}
                   </span>
                   <span className="truncate">{c.title}</span>
+                  {flagged && <FlagIcon className="ml-auto h-3 w-3 shrink-0 text-bad" />}
                 </button>
               </li>
             );
@@ -84,9 +90,22 @@ export default function ComparePage() {
         </div>
 
         <div className="mb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge>{kindLabel(contest.kind)}</Badge>
-            {contest.isJudicial && <Badge tone="accent">Judicial</Badge>}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>{kindLabel(contest.kind)}</Badge>
+              {contest.isJudicial && <Badge tone="accent">Judicial</Badge>}
+            </div>
+            {contest.kind !== "measure" && (
+              <Toggle
+                checked={showFlags}
+                onChange={setShowFlags}
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    <FlagIcon className={showFlags ? "text-bad" : ""} /> Red flags
+                  </span>
+                }
+              />
+            )}
           </div>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{contest.title}</h1>
           <p className="mt-1 text-[13px] text-muted">
@@ -128,6 +147,7 @@ function ContestBody({ contest }: { contest: Contest }) {
   const toggle = useBallot((s) => s.toggleChoice);
   const candidates = useBallot((s) => s.candidates);
   const measures = useBallot((s) => s.measures);
+  const showFlags = useBallot((s) => s.showFlags);
   const options = contest.options.length ? contest.options : ["Yes", "No"];
 
   if (contest.kind === "measure") {
@@ -158,6 +178,7 @@ function ContestBody({ contest }: { contest: Contest }) {
               job={candidates[key] ?? { status: "idle" }}
               selected={chosen.includes(c.name)}
               selectable={contest.kind === "candidate"}
+              showFlags={showFlags}
               onSelect={() => toggle(contest.id, c.name, contest.voteFor)}
               onRetry={() => retryJob({ kind: "candidate", key, contest, index: i })}
             />

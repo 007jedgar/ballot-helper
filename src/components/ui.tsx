@@ -9,7 +9,7 @@ const variants: Record<Variant, string> = {
 };
 
 export function buttonClass(variant: Variant = "secondary", extra = "") {
-  return `inline-flex items-center justify-center gap-2 rounded-lg px-3.5 h-9 text-[13px] font-medium transition-colors disabled:opacity-40 disabled:pointer-events-none ${variants[variant]} ${extra}`;
+  return `inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 h-9 text-[13px] font-medium transition-colors disabled:opacity-40 disabled:pointer-events-none ${variants[variant]} ${extra}`;
 }
 
 export function Button({ variant = "secondary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
@@ -42,4 +42,30 @@ export function Spinner({ className = "" }: { className?: string }) {
 
 export function kindLabel(kind: "candidate" | "measure" | "retention") {
   return kind === "measure" ? "Measure" : kind === "retention" ? "Retention" : "Race";
+}
+
+export function FlagIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden className={`h-3.5 w-3.5 ${className}`}>
+      <path d="M3 1.75a.75.75 0 0 1 1.5 0V2h7.69a.75.75 0 0 1 .6 1.2L10.94 5.5l1.85 2.3a.75.75 0 0 1-.6 1.2H4.5v5.25a.75.75 0 0 1-1.5 0V1.75Z" />
+    </svg>
+  );
+}
+
+export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-[13px] text-muted hover:text-fg"
+    >
+      <span className={`relative h-[18px] w-8 rounded-full transition-colors ${checked ? "bg-bad/80" : "bg-surface-2 ring-1 ring-line-strong"}`}>
+        <span
+          className={`absolute left-0 top-[3px] h-3 w-3 rounded-full bg-white transition-transform ${checked ? "translate-x-[17px]" : "translate-x-[3px]"}`}
+        />
+      </span>
+      {label}
+    </button>
+  );
 }

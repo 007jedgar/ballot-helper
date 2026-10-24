@@ -20,6 +20,7 @@ type State = {
   choices: Record<string, string[]>;
   step: number;
   paused: boolean;
+  showFlags: boolean;
   setBallot: (ballot: BallotExtract, fileName: string) => void;
   removeContest: (id: string) => void;
   setCandidateJob: (key: string, job: Job<CandidateResearch>) => void;
@@ -27,21 +28,32 @@ type State = {
   toggleChoice: (contestId: string, value: string, voteFor: number) => void;
   setStep: (step: number) => void;
   setPaused: (paused: boolean) => void;
+  setShowFlags: (show: boolean) => void;
   reset: () => void;
 };
 
-const empty = { ballot: null, fileName: null, candidates: {}, measures: {}, choices: {}, step: 0, paused: false };
+const empty = {
+  ballot: null,
+  fileName: null,
+  candidates: {},
+  measures: {},
+  choices: {},
+  step: 0,
+  paused: false,
+  showFlags: true,
+};
 
 export const useBallot = create<State>()(
   persist(
     (set) => ({
       ...empty,
       setBallot: (ballot, fileName) =>
-        set({
+        set((s) => ({
           ...empty,
+          showFlags: s.showFlags,
           fileName,
           ballot: { ...ballot, contests: ballot.contests.map((c, i) => ({ ...c, id: `c${i}` })) },
-        }),
+        })),
       removeContest: (id) =>
         set((s) => (s.ballot ? { ballot: { ...s.ballot, contests: s.ballot.contests.filter((c) => c.id !== id) } } : {})),
       setCandidateJob: (key, job) => set((s) => ({ candidates: { ...s.candidates, [key]: job } })),
@@ -58,7 +70,9 @@ export const useBallot = create<State>()(
         }),
       setStep: (step) => set({ step }),
       setPaused: (paused) => set({ paused }),
-      reset: () => set(empty),
+      setShowFlags: (showFlags) => set({ showFlags }),
+      // Keep the red-flag preference across ballots.
+      reset: () => set((s) => ({ ...empty, showFlags: s.showFlags })),
     }),
     {
       name: "ballot-helper",
