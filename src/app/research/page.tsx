@@ -13,12 +13,12 @@ export default function ResearchPage() {
   const paused = useBallot((s) => s.paused);
   const setPaused = useBallot((s) => s.setPaused);
   const { done, total, errors } = useProgress();
-  const { etaMs, ready } = useEta();
+  // `remaining` excludes failed items, so the estimate and Pause go away once nothing is left to run.
+  const { pct, etaMs, remaining, ready } = useEta();
   if (!hydrated) return null;
   if (!ballot) return <NoBallot />;
 
   const jobs = listJobs(ballot);
-  const pct = total ? Math.round((done / total) * 100) : 0;
   const header = [ballot.electionName, ballot.electionDate, ballot.jurisdiction ?? ballot.county, ballot.state]
     .filter(Boolean)
     .join(" · ");
@@ -30,9 +30,9 @@ export default function ResearchPage() {
           <p className="text-[13px] text-muted">{header || "Your ballot"}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Researching your ballot</h1>
           <p className="mt-2 text-[13px] text-muted">
-            {paused && done < total
+            {paused && remaining > 0
               ? "Research paused."
-              : done < total
+              : remaining > 0
               ? "You can start comparing now. Research keeps running in the background, starting with whatever race you're viewing."
               : errors
                 ? `${errors} item${errors > 1 ? "s" : ""} failed. Retry below.`
@@ -40,7 +40,7 @@ export default function ResearchPage() {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          {done < total && <Button onClick={() => setPaused(!paused)}>{paused ? "Resume" : "Pause"}</Button>}
+          {remaining > 0 && <Button onClick={() => setPaused(!paused)}>{paused ? "Resume" : "Pause"}</Button>}
           <Link href="/compare" className={buttonClass("primary")}>
             Start comparing →
           </Link>
@@ -51,7 +51,7 @@ export default function ResearchPage() {
         <p className="font-mono text-[11px] text-faint">
           {done}/{total} researched
         </p>
-        {ready && done < total && (
+        {ready && remaining > 0 && (
           <p className="text-[13px] tabular-nums">
             <span className="font-medium text-fg">{pct}%</span>
             <span className="text-muted">

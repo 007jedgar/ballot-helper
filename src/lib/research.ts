@@ -174,12 +174,13 @@ export function useEta() {
     if (paused) resetThroughput();
   }, [paused]);
 
-  const pct = total ? Math.round((done / total) * 100) : 0;
+  // Round down so "100%" only appears when everything is actually done.
+  const pct = total ? Math.floor((done / total) * 100) : 0;
   const remaining = total - done - errors;
   const elapsed = sessionStart ? Math.max(now - sessionStart, 1) : 0;
   const etaMs =
     !paused && remaining > 0 && sessionDone >= MIN_SAMPLES && elapsed ? (remaining * elapsed) / sessionDone : null;
-  return { pct, etaMs, ready: done >= MIN_SAMPLES };
+  return { pct, etaMs, remaining, ready: done >= MIN_SAMPLES };
 }
 
 export function formatEta(ms: number) {
