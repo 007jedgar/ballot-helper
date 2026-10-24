@@ -8,8 +8,9 @@ import { candidateKey, useBallot, type Ballot, type Contest, type Job } from "./
 const CONCURRENCY = 4;
 const inflight = new Set<string>();
 
-// Throughput for this tab's session, used for the time estimate. Resets when
-// research is paused so idle time doesn't drag the rate down.
+// Throughput for this tab's session, used for the time estimate: only items
+// actually researched count (not cache hits). Resets when research is paused
+// so idle time doesn't drag the rate down.
 let sessionStart: number | null = null;
 let sessionDone = 0;
 export function resetThroughput() {
@@ -76,11 +77,11 @@ async function post(url: string, body: unknown) {
  * function time limit. The first request returns cached research when the
  * server already has it.
  */
-async function research<T>(url: string, input: Record<string, unknown>): Promise<T> {
+async function research<T>(url: string, input: Record<string, unknown>): Promise<{ data: T; cached: boolean }> {
   const first = await post(url, input);
-  if (first.research) return first.research as T; // served from the shared cache
+  if (first.research) return { data: first.research as T, cached: true }; // served from the shared cache
   const { research } = await post(url, { ...input, notes: first.notes });
-  return research as T;
+  return { data: research as T, cached: false };
 }
 
 async function run(job: ResearchJob, ballot: Ballot) {
@@ -97,18 +98,19 @@ async function run(job: ResearchJob, ballot: Ballot) {
   try {
     if (job.kind === "measure") {
       store.setMeasureJob(job.key, { status: "loading" });
-      const data = await research<MeasureResearch>("/api/research/measure", {
+      const { data, cached } = await research<MeasureResearch>("/api/research/measure", {
         title: job.contest.title,
         district: job.contest.district,
         text: job.contest.measureText,
         election,
       });
-      sessionDone++;
+      // Instant cache hits would make the time estimate wildly optimistic.
+      if (!cached) sessionDone++;
       useBallot.getState().setMeasureJob(job.key, { status: "done", data });
     } else {
       store.setCandidateJob(job.key, { status: "loading" });
       const c = job.contest.candidates[job.index];
-      const data = await research<CandidateResearch>("/api/research/candidate", {
+      const { data, cached } = await research<CandidateResearch>("/api/research/candidate", {
         name: c.name,
         party: c.party,
         office: job.contest.title,
@@ -119,7 +121,8 @@ async function run(job: ResearchJob, ballot: Ballot) {
         // Omitted means a full profile (and shares the full-profile cache entry).
         ...(isFullTopics(job.topics) ? {} : { topics: job.topics }),
       });
-      sessionDone++;
+      // Instant cache hits would make the time estimate wildly optimistic.
+      if (!cached) sessionDone++;
       useBallot.getState().setCandidateJob(job.key, { status: "done", data });
     }
   } catch (err) {
@@ -202,7 +205,7 @@ export function useEta() {
   const elapsed = sessionStart ? Math.max(now - sessionStart, 1) : 0;
   const etaMs =
     !paused && remaining > 0 && sessionDone >= MIN_SAMPLES && elapsed ? (remaining * elapsed) / sessionDone : null;
-  return { pct, etaMs, remaining, ready: done >= MIN_SAMPLES };
+  return { pct, etaMs, remaining };
 }
 
 export function formatEta(ms: number) {

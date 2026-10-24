@@ -20,7 +20,7 @@ export default function ResearchPage() {
   const forceContest = useBallot((s) => s.forceContest);
   const { done, total, errors } = useProgress();
   // `remaining` excludes failed items, so the estimate and Pause go away once nothing is left to run.
-  const { pct, etaMs, remaining, ready } = useEta();
+  const { pct, etaMs, remaining } = useEta();
   if (!hydrated) return null;
   if (!ballot) return <NoBallot />;
   if (!prefsConfirmed) {
@@ -72,12 +72,12 @@ export default function ResearchPage() {
         <p className="font-mono text-[11px] text-faint">
           {done}/{total} researched
         </p>
-        {ready && remaining > 0 && (
+        {remaining > 0 && (
           <p className="text-[13px] tabular-nums">
             <span className="font-medium text-fg">{pct}%</span>
             <span className="text-muted">
               {" · "}
-              {paused ? "paused" : etaMs != null ? formatEta(etaMs) : "estimating…"}
+              {paused ? "paused" : etaMs != null ? formatEta(etaMs) : "estimating time…"}
             </span>
           </p>
         )}
