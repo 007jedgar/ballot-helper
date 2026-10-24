@@ -65,10 +65,13 @@ function locate(lines: Line[], contest: Contest, target: string, needsAnchor: bo
 
   // Several matches (e.g. FOR/AGAINST under each proposition): take the one
   // closest below a line that starts this contest's title, in the same column.
+  // The extracted title may be split into title + district ("HCAD Director,
+  // At-Large" + "Place 1") or reworded slightly, so match either way round.
   const titleKey = key(contest.title);
+  const fullKey = key(`${contest.title} ${contest.district ?? ""}`);
   const anchors = pool.filter((l) => {
     const k = key(l.text);
-    return k.length >= 6 && titleKey.startsWith(k);
+    return k.length >= 6 && (fullKey.startsWith(k) || titleKey.startsWith(k) || k.startsWith(titleKey));
   });
   let best: { line: Line; d: number } | null = null;
   for (const hit of hits) {
