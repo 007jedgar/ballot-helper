@@ -8,6 +8,7 @@ Upload your sample ballot and get nonpartisan research on every race and measure
 - **Red flags** (toggleable): a red flag next to a candidate's name marks a documented conflict of interest with the office they're running for (e.g. an oil company owner running to regulate oil, a private religious school board member running for public school board), a serious criminal conviction, an impeachment, or a formal ethics finding. An explanation and a source come with each one.
 - **Compare** races side by side and pick. Use ← / → to move between contests. Research runs in the background, starting with the race you're viewing, and can be paused.
 - **Export** a PDF of your sample ballot with your choices checked, or print it.
+- **Fill in your original ballot.** If you uploaded a text-based PDF (like most county sample ballots), the app fills in the boxes next to your picks on the original document. It finds each name in the PDF's text layer and the box beside it on the rendered page. Anything it can't locate is listed so you can mark it by hand. Scans and photos don't have a text layer, so only the generated PDF is available for those.
 
 Everything you do stays in your browser (localStorage). The server only forwards requests to the AI provider. It has no database.
 

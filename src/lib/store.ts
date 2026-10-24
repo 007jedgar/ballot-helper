@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { BallotExtract, CandidateResearch, ContestExtract, MeasureResearch } from "./schema";
 
-export type Contest = ContestExtract & { id: string };
+export type Contest = ContestExtract & { id: string; page?: number };
 export type Ballot = Omit<BallotExtract, "contests"> & { contests: Contest[] };
 
 export type Job<T> = { status: "idle" | "loading" | "done" | "error"; data?: T; error?: string };
@@ -21,7 +21,7 @@ type State = {
   step: number;
   paused: boolean;
   showFlags: boolean;
-  setBallot: (ballot: BallotExtract, fileName: string) => void;
+  setBallot: (ballot: Omit<BallotExtract, "contests"> & { contests: (ContestExtract & { page?: number })[] }, fileName: string) => void;
   removeContest: (id: string) => void;
   setCandidateJob: (key: string, job: Job<CandidateResearch>) => void;
   setMeasureJob: (id: string, job: Job<MeasureResearch>) => void;

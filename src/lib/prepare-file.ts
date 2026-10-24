@@ -47,11 +47,18 @@ async function downscaleImage(file: File): Promise<File> {
   return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
 }
 
-/** Combines per-page extractions, joining a contest that continues onto the next page. */
-export function mergeBallots(parts: BallotExtract[]): BallotExtract {
+export type PagedBallot = Omit<BallotExtract, "contests"> & {
+  contests: (BallotExtract["contests"][number] & { page: number })[];
+};
+
+/**
+ * Combines per-page extractions, joining a contest that continues onto the
+ * next page. Each contest remembers the (0-based) page it starts on.
+ */
+export function mergeBallots(parts: BallotExtract[]): PagedBallot {
   const pick = <K extends keyof BallotExtract>(k: K) => parts.find((p) => p[k])?.[k] ?? null;
-  const contests: BallotExtract["contests"] = [];
-  for (const part of parts) {
+  const contests: PagedBallot["contests"] = [];
+  for (const [page, part] of parts.entries()) {
     for (const c of part.contests) {
       const prev = contests.at(-1);
       if (prev && prev.kind === c.kind && prev.title === c.title && prev.district === c.district) {
@@ -59,7 +66,7 @@ export function mergeBallots(parts: BallotExtract[]): BallotExtract {
         prev.candidates.push(...c.candidates.filter((x) => !names.has(x.name)));
         prev.measureText = [prev.measureText, c.measureText].filter(Boolean).join(" ") || null;
         if (!prev.options.length) prev.options = c.options;
-      } else contests.push({ ...c, candidates: [...c.candidates] });
+      } else contests.push({ ...c, candidates: [...c.candidates], page });
     }
   }
   return {
@@ -69,5 +76,5 @@ export function mergeBallots(parts: BallotExtract[]): BallotExtract {
     county: pick("county"),
     jurisdiction: pick("jurisdiction"),
     contests,
-  } as BallotExtract;
+  };
 }

@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NoBallot } from "@/components/empty-state";
 import { Button } from "@/components/ui";
 import { exportBallotPdf } from "@/lib/export-pdf";
+import { loadOriginal } from "@/lib/file-store";
+import { canMark, markOriginal, type MarkReport } from "@/lib/mark-original";
 import { useBallot, useHydrated } from "@/lib/store";
 
 export default function ReviewPage() {
@@ -14,23 +16,56 @@ export default function ReviewPage() {
   const choices = useBallot((s) => s.choices);
   const setStep = useBallot((s) => s.setStep);
   const [busy, setBusy] = useState(false);
+  const [original, setOriginal] = useState<File | null>(null);
+  const [marking, setMarking] = useState(false);
+  const [markResult, setMarkResult] = useState<MarkReport | string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const file = await loadOriginal();
+      if (file && !cancelled && (await canMark(file).catch(() => false)) && !cancelled) setOriginal(file);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (!hydrated) return null;
   if (!ballot) return <NoBallot />;
 
   const made = ballot.contests.filter((c) => (choices[c.id] ?? []).length).length;
 
+  const save = (bytes: Uint8Array, name: string) => {
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const download = async () => {
     setBusy(true);
     try {
-      const bytes = await exportBallotPdf(ballot, choices);
-      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `my-sample-ballot${ballot.electionDate ? `-${ballot.electionDate}` : ""}.pdf`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      save(await exportBallotPdf(ballot, choices), `my-sample-ballot${ballot.electionDate ? `-${ballot.electionDate}` : ""}.pdf`);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const fillOriginal = async () => {
+    if (!original) return;
+    setMarking(true);
+    setMarkResult(null);
+    try {
+      const { bytes, report } = await markOriginal(original, ballot, choices);
+      save(bytes, original.name.replace(/\.pdf$/i, "") + "-marked.pdf");
+      setMarkResult(report);
+    } catch (e) {
+      setMarkResult(e instanceof Error ? e.message : "Couldn't mark the original ballot.");
+    } finally {
+      setMarking(false);
     }
   };
 
@@ -43,13 +78,47 @@ export default function ReviewPage() {
             {made} of {ballot.contests.length} decided. Bring this with you to the polls.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button onClick={() => window.print()}>Print</Button>
-          <Button variant="primary" onClick={download} disabled={busy}>
+          <Button variant={original ? "secondary" : "primary"} onClick={download} disabled={busy}>
             Download PDF
           </Button>
+          {original && (
+            <Button variant="primary" onClick={fillOriginal} disabled={marking || made === 0}>
+              {marking ? "Filling in…" : "Fill in my original ballot"}
+            </Button>
+          )}
         </div>
       </div>
+
+      {markResult && (
+        <div className="mb-6 rounded-xl border border-line bg-surface p-4 text-[13px] print:hidden">
+          {typeof markResult === "string" ? (
+            <p className="text-bad">{markResult}</p>
+          ) : (
+            <>
+              <p>
+                Marked {markResult.filled + markResult.checked} selection{markResult.filled + markResult.checked === 1 ? "" : "s"} on{" "}
+                {original?.name}.
+                {markResult.checked > 0 && (
+                  <span className="text-muted"> {markResult.checked} got a check mark because no box was found next to the name.</span>
+                )}{" "}
+                <span className="text-muted">Double-check it before relying on it.</span>
+              </p>
+              {markResult.missing.length > 0 && (
+                <div className="mt-2 text-warn">
+                  Couldn&apos;t find these on the original, so mark them by hand:
+                  <ul className="mt-1 list-disc pl-5 text-fg/80">
+                    {markResult.missing.map((m) => (
+                      <li key={m}>{m}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl bg-white p-6 text-[#16171a] shadow-[0_0_0_1px_rgb(255_255_255/0.1)] sm:p-10 print:rounded-none print:p-0 print:shadow-none">
         <h2 className="text-xl font-semibold tracking-tight">My Sample Ballot</h2>

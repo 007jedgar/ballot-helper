@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { Button, Spinner, buttonClass } from "@/components/ui";
+import { clearOriginal, saveOriginal } from "@/lib/file-store";
 import { mergeBallots, prepareUploads } from "@/lib/prepare-file";
 import type { BallotExtract } from "@/lib/schema";
 import { useBallot, useHydrated } from "@/lib/store";
@@ -48,6 +49,7 @@ export default function UploadPage() {
         );
         const ballot = mergeBallots(parts);
         if (!ballot.contests.length) throw new Error("No contests found. Is this a sample ballot?");
+        await saveOriginal(raw);
         setBallot(ballot, raw.name);
         router.push("/research");
       } catch (e) {
@@ -130,7 +132,13 @@ export default function UploadPage() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={reset}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  reset();
+                  void clearOriginal();
+                }}
+              >
                 Clear
               </Button>
               <Link href="/compare" className={buttonClass("primary")}>
