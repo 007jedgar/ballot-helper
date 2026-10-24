@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #08090a;
+  --color-surface: #0f1011;
+  --color-surface-2: #16171a;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-line-strong: rgb(255 255 255 / 0.14);
+  --color-fg: #f7f8f8;
+  --color-muted: #8a8f98;
+  --color-faint: #62666d;
+  --color-accent: #5e6ad2;
+  --color-accent-hover: #7170ff;
+  --color-good: #4cb782;
+  --color-warn: #f2c94c;
+  --color-bad: #eb5757;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+  background: rgb(94 106 210 / 0.4);
+}
+
+.glow {
+  background:
+    radial-gradient(60% 50% at 50% 0%, rgb(94 106 210 / 0.18), transparent 70%),
+    radial-gradient(40% 30% at 80% 10%, rgb(113 112 255 / 0.08), transparent 70%);
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.03), rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.03));
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@media print {
+  html { color-scheme: light; }
+  body { background: white; }
+}
