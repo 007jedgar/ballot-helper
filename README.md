@@ -56,6 +56,8 @@ You can override each one with `ANTHROPIC_MODEL_EXTRACT`, `ANTHROPIC_MODEL_RESEA
 
 ## Costs and support
 
+Most of the cost is the web-research step: search results and fetched pages are re-sent on every turn. Fetched pages are capped at 6K tokens each to keep that down. Thin, low-confidence results are cached for 7 days instead of 30.
+
 Every Claude call's approximate cost is computed from its token usage (list prices, plus $10 per 1,000 web searches). It's logged as `[cost] …` in the Vercel function logs, and saved with the cached research so the app knows what each ballot's research cost originally.
 
 After a voter exports their ballot, a small, dismissable card says what the AI research behind it cost and offers to "chip in". It shows once per ballot, never blocks anything, and stays hidden unless a link is configured. A "Support this project" link also appears in the footer. To turn it on, create a Stripe Payment Link with **"Let customers choose what to pay"** (suggested amount $5) and set `NEXT_PUBLIC_SUPPORT_URL`. Optionally, set `NEXT_PUBLIC_SUPPORT_URL_3/_5/_10/_20` to fixed-amount links for one-tap $3/$5/$10/$20 buttons. These are build-time variables, so redeploy after setting them. The copy calls it support, not a donation, since contributions aren't tax-deductible.

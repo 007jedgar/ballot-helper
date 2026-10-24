@@ -73,8 +73,8 @@ export async function POST(req: Request) {
     });
     const research = analyzed.value;
     const cost = analyzed.cost == null ? null : analyzed.cost + (gatherCost ?? 0);
-    // Thin or uncertain results aren't worth reusing for 30 days.
-    if (research.confidence !== "low") await writeCache(path, research, cost);
+    // Thin results (often obscure candidates) are still worth reusing, just not for as long.
+    await writeCache(path, research, cost, research.confidence === "low" ? 7 : undefined);
     return Response.json({ research, cost });
   } catch (err) {
     return errorResponse(err);

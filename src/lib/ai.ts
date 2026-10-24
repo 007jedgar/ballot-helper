@@ -192,7 +192,9 @@ async function claudeResearch(system: string, task: string, budget: SearchBudget
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: task }];
   const tools: Anthropic.Beta.BetaToolUnion[] = [
     { type: "web_search_20260209", name: "web_search", max_uses: budget.searches },
-    { type: "web_fetch_20260209", name: "web_fetch", max_uses: budget.fetches },
+    // Whole pages get re-sent on every turn; capping them is the biggest cost lever
+    // (and keeps Haiku prompts under 100K tokens, where its price jumps).
+    { type: "web_fetch_20260209", name: "web_fetch", max_uses: budget.fetches, max_content_tokens: 6000 },
   ];
   let writeUp = false;
   let found = 0;

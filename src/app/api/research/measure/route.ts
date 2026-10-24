@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     });
     const research = analyzed.value;
     const cost = analyzed.cost == null ? null : analyzed.cost + (gatherCost ?? 0);
-    if (research.confidence !== "low") await writeCache(path, research, cost);
+    await writeCache(path, research, cost, research.confidence === "low" ? 7 : undefined);
     return Response.json({ research, cost });
   } catch (err) {
     return errorResponse(err);
