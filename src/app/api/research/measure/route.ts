@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { analyzeNotes, gatherNotes } from "@/lib/ai";
+import { cachePath, readCache, writeCache } from "@/lib/cache";
 import { errorResponse } from "@/lib/http";
 import { mockEnabled, mockMeasure } from "@/lib/mock";
 import { MEASURE_STRUCTURE, RESEARCH_SYSTEM, measureTask } from "@/lib/prompts";
@@ -33,9 +34,28 @@ export async function POST(req: Request) {
       if (!notes) return Response.json({ notes: "mock notes" });
       return Response.json({ research: await mockMeasure(input.title) });
     }
+    // Step 1 checks the shared cache first; a hit skips both steps.
+    const path = cachePath("measure", {
+      title: input.title,
+      district: input.district,
+      text: input.text,
+      state: input.election.state,
+      county: input.election.county,
+      electionDate: input.election.electionDate,
+    });
+    if (!notes) {
+      const cached = await readCache(path);
+      if (cached) return Response.json({ research: cached, cached: true });
+    }
     const task = measureTask(input);
     if (!notes) return Response.json({ notes: await gatherNotes(RESEARCH_SYSTEM, task) });
-    const research = await analyzeNotes(MeasureResearchSchema, { task, notes, structureHint: MEASURE_STRUCTURE, tier: "measure" });
+    const research = await analyzeNotes(MeasureResearchSchema, {
+      task,
+      notes,
+      structureHint: MEASURE_STRUCTURE,
+      tier: "measure",
+    });
+    await writeCache(path, research);
     return Response.json({ research });
   } catch (err) {
     return errorResponse(err);

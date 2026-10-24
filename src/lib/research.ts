@@ -56,10 +56,15 @@ async function post(url: string, body: unknown) {
   }
 }
 
-/** Gather notes, then analyze them: two requests so each gets the full function time limit. */
+/**
+ * Gather notes, then analyze them: two requests so each gets the full
+ * function time limit. The first request returns cached research when the
+ * server already has it.
+ */
 async function research<T>(url: string, input: Record<string, unknown>): Promise<T> {
-  const { notes } = await post(url, input);
-  const { research } = await post(url, { ...input, notes });
+  const first = await post(url, input);
+  if (first.research) return first.research as T; // served from the shared cache
+  const { research } = await post(url, { ...input, notes: first.notes });
   return research as T;
 }
 

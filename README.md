@@ -10,7 +10,7 @@ Upload your sample ballot and get nonpartisan research on every race and measure
 - **Export** a PDF of your sample ballot with your choices checked, or print it.
 - **Fill in your original ballot.** If you uploaded a text-based PDF (like most county sample ballots), the app fills in the boxes next to your picks on the original document. It finds each name in the PDF's text layer and the box beside it on the rendered page. Anything it can't locate is listed so you can mark it by hand. Scans and photos don't have a text layer, so only the generated PDF is available for those.
 
-Everything you do stays in your browser (localStorage). The server only forwards requests to the AI provider. It has no database.
+Your ballot and picks stay in your browser (localStorage, plus IndexedDB for the uploaded file). Finished research on candidates and measures (public information) is also cached on the server for 30 days in a private Vercel Blob store. Anyone researching the same race in that time gets instant results and doesn't spend API credits. Without a Blob store connected (`BLOB_READ_WRITE_TOKEN` unset), the cache is skipped.
 
 ## Stack
 
@@ -30,9 +30,10 @@ To work on the UI without an API key, run with fixture data: `MOCK_AI=1 npm run 
 
 1. Import this repo at vercel.com/new. No configuration is needed.
 2. Add `ANTHROPIC_API_KEY` (or `GROQ_API_KEY`) under Settings → Environment Variables.
-3. Deploy.
+3. Optional, recommended: create a **private** Blob store under Storage and connect it to the project to turn on the 30-day research cache.
+4. Deploy.
 
-The API routes set `maxDuration = 300`, which fits within Hobby limits with Fluid Compute (on by default).
+The API routes set `maxDuration = 300`, which fits within Hobby limits with Fluid Compute (on by default). Each research job takes two requests (gather notes, then analyze), so each step gets the full time limit.
 
 ## Models
 
