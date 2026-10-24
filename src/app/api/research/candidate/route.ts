@@ -53,7 +53,8 @@ export async function POST(req: Request) {
       electionDate: input.election.electionDate,
     };
     const fullPath = cachePath("candidate", identity);
-    const path = full ? fullPath : cachePath("candidate", { ...identity, topics: topics.join(",") });
+    // "v2" retired narrow entries cached before failed lookups were detected.
+    const path = full ? fullPath : cachePath("candidate", { ...identity, topics: topics.join(","), v: "2" });
     if (!notes) {
       const cached = (await readCache(path)) ?? (full ? null : await readCache(fullPath));
       if (cached) return Response.json({ research: cached, cached: true });
@@ -67,7 +68,8 @@ export async function POST(req: Request) {
       tier: "candidate",
       effort: topics.length <= 2 ? "low" : "medium",
     });
-    await writeCache(path, research);
+    // Thin or uncertain results aren't worth reusing for 30 days.
+    if (research.confidence !== "low") await writeCache(path, research);
     return Response.json({ research });
   } catch (err) {
     return errorResponse(err);

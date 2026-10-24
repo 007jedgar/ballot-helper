@@ -88,9 +88,11 @@ ${items.map((x, i) => `${i + 1}. ${x}`).join("\n")}${
   }`;
 }
 
-/** Fewer topics need fewer web lookups. */
+/**
+ * Fewer topics need fewer web lookups. Kept above ~5 searches: one failed
+ * search shouldn't exhaust the budget (savings come mostly from topics/effort).
+ */
 export function researchBudget(topics: readonly Topic[]) {
-  if (topics.length <= 2) return { searches: 3, fetches: 2 };
   if (topics.length <= 4) return { searches: 5, fetches: 3 };
   return { searches: 6, fetches: 4 };
 }

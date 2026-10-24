@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       structureHint: MEASURE_STRUCTURE,
       tier: "measure",
     });
-    await writeCache(path, research);
+    if (research.confidence !== "low") await writeCache(path, research);
     return Response.json({ research });
   } catch (err) {
     return errorResponse(err);

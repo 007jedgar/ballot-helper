@@ -164,6 +164,16 @@ export async function analyzeNotes<S extends z.ZodType>(
 
 const WRITE_UP = "Stop searching now. Write your research notes from what you have already found, with source URLs.";
 
+/** Web search/fetch calls in this turn that actually returned content. */
+const lookupsFound = (content: Anthropic.Beta.BetaContentBlock[]) =>
+  content.filter(
+    (b) =>
+      (b.type === "web_search_tool_result" && Array.isArray(b.content) && b.content.length > 0) ||
+      (b.type === "web_fetch_tool_result" && b.content.type === "web_fetch_result"),
+  ).length;
+
+export class ResearchFailedError extends Error {}
+
 const textOf = (content: Anthropic.Beta.BetaContentBlock[]) =>
   content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
@@ -178,6 +188,7 @@ async function claudeResearch(system: string, task: string, budget: SearchBudget
     { type: "web_fetch_20260209", name: "web_fetch", max_uses: budget.fetches },
   ];
   let writeUp = false;
+  let found = 0;
   for (let turn = 0; turn < 6; turn++) {
     const res = await claude()
       .beta.messages.stream({
@@ -193,12 +204,18 @@ async function claudeResearch(system: string, task: string, budget: SearchBudget
       })
       .finalMessage();
     if (res.stop_reason === "refusal") throw new Error("The model declined this research request.");
+    found += lookupsFound(res.content);
     const text = textOf(res.content);
 
     // A long server-tool turn can pause; it must be resumed by sending it back as-is.
     if (res.stop_reason === "pause_turn") {
       messages.push({ role: "assistant", content: res.content });
       continue;
+    }
+    // Notes written without a single successful lookup are guesses from memory
+    // (e.g. web search errored out). Fail so nothing is cached and the client retries.
+    if ((text.length > 200 || (writeUp && text)) && found === 0) {
+      throw new ResearchFailedError("Web search didn't return results for this candidate. Try again.");
     }
     // Long enough to be real notes: done (even if cut off by max_tokens).
     if (text.length > 200 || (writeUp && text)) return text;
