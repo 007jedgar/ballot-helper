@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { NoBallot } from "@/components/empty-state";
+import { ShareButton } from "@/components/share-button";
 import { Badge, Button, Spinner, buttonClass, kindLabel } from "@/components/ui";
 import { formatEta, jobState, listJobs, retryJob, useEta, useProgress, type ResearchJob } from "@/lib/research";
 import { useBallot, useHydrated } from "@/lib/store";
@@ -40,6 +41,7 @@ export default function ResearchPage() {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
+          {done > 0 && <ShareButton />}
           {remaining > 0 && <Button onClick={() => setPaused(!paused)}>{paused ? "Resume" : "Pause"}</Button>}
           <Link href="/compare" className={buttonClass("primary")}>
             Start comparing →

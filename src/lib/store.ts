@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { BallotExtract, CandidateResearch, ContestExtract, MeasureResearch } from "./schema";
+import type { ShareSnapshot } from "./share-schema";
 
 export type Contest = ContestExtract & { id: string; page?: number };
 export type Ballot = Omit<BallotExtract, "contests"> & { contests: Contest[] };
@@ -22,6 +23,7 @@ type State = {
   paused: boolean;
   showFlags: boolean;
   setBallot: (ballot: Omit<BallotExtract, "contests"> & { contests: (ContestExtract & { page?: number })[] }, fileName: string) => void;
+  importShare: (share: ShareSnapshot) => void;
   removeContest: (id: string) => void;
   setCandidateJob: (key: string, job: Job<CandidateResearch>) => void;
   setMeasureJob: (id: string, job: Job<MeasureResearch>) => void;
@@ -54,6 +56,20 @@ export const useBallot = create<State>()(
           fileName,
           ballot: { ...ballot, contests: ballot.contests.map((c, i) => ({ ...c, id: `c${i}` })) },
         })),
+      importShare: (share) =>
+        set((s) => {
+          const done = <T,>(records: Record<string, unknown>): Record<string, Job<T>> =>
+            Object.fromEntries(Object.entries(records).map(([k, data]) => [k, { status: "done", data: data as T }]));
+          return {
+            ...empty,
+            showFlags: s.showFlags,
+            fileName: share.ballot.electionName ?? "Shared ballot",
+            ballot: share.ballot,
+            candidates: done<CandidateResearch>(share.candidates),
+            measures: done<MeasureResearch>(share.measures),
+            choices: share.choices ?? {},
+          };
+        }),
       removeContest: (id) =>
         set((s) => (s.ballot ? { ballot: { ...s.ballot, contests: s.ballot.contests.filter((c) => c.id !== id) } } : {})),
       setCandidateJob: (key, job) => set((s) => ({ candidates: { ...s.candidates, [key]: job } })),

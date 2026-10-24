@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NoBallot } from "@/components/empty-state";
+import { ShareButton } from "@/components/share-button";
 import { Button } from "@/components/ui";
 import { exportBallotPdf } from "@/lib/export-pdf";
 import { loadOriginal } from "@/lib/file-store";
@@ -79,6 +80,7 @@ export default function ReviewPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <ShareButton />
           <Button onClick={() => window.print()}>Print</Button>
           <Button variant={original ? "secondary" : "primary"} onClick={download} disabled={busy}>
             Download PDF
