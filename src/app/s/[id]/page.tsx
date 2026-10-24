@@ -13,7 +13,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const share = await readShare((await params).id);
   if (!share) return { title: "Shared ballot · Ballot Helper" };
   const title = `${share.ballot.electionName ?? "Ballot"} research${share.ballot.county ? ` · ${share.ballot.county}` : ""}`;
-  const description = `Nonpartisan research on ${share.ballot.contests.length} races and measures${placeOf(share.ballot) ? ` for ${placeOf(share.ballot)}` : ""}. Open it to compare candidates and pick.`;
+  const n = share.ballot.contests.length;
+  const description = `Nonpartisan research on ${n} ${n === 1 ? "race" : "races and measures"}${placeOf(share.ballot) ? ` for ${placeOf(share.ballot)}` : ""}. Open it to compare candidates and pick.`;
   return { title: `${title} · Ballot Helper`, description, openGraph: { title, description }, twitter: { title, description } };
 }
 
