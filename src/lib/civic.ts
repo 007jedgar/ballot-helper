@@ -150,9 +150,10 @@ export async function lookupBallot(address: string): Promise<BallotExtract> {
   const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    const reason = json?.error?.errors?.[0]?.reason ?? json?.error?.message ?? "";
+    // Google pairs a vague reason ("invalid") with the useful part in the message ("Election unknown").
+    const reason = `${json?.error?.errors?.[0]?.reason ?? ""} ${json?.error?.message ?? ""}`.trim();
     console.error(`[lookup] civic ${res.status} ${reason}`);
-    if (/parseError|address/i.test(reason)) throw new LookupError("We couldn't find that address. Include the street, city, state, and ZIP.");
+    if (/parseError|parse address/i.test(reason)) throw new LookupError("We couldn't find that address. Include the street, city, state, and ZIP.");
     if (/election|notFound/i.test(reason) || res.status === 404) throw new LookupError(NO_DATA, 404);
     throw new LookupError("The ballot lookup service isn't responding. Try again, or upload your sample ballot.", 502);
   }
