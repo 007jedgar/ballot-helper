@@ -88,7 +88,14 @@ export function categoryOf(c: ContestLike): Category {
 }
 
 export function partyOf(label: string | null | undefined): Party | null {
-  const l = (label ?? "").toLowerCase();
+  const l = (label ?? "").toLowerCase().trim();
+  // Ballots and data feeds often abbreviate: "R", "(D)", "Lib", "Grn", "IND".
+  const abbr = l.replace(/[().]/g, "");
+  if (/^(d|dem)$/.test(abbr)) return "democratic";
+  if (/^(r|rep)$/.test(abbr)) return "republican";
+  if (/^(l|lib|lbt)$/.test(abbr)) return "libertarian";
+  if (/^(g|grn)$/.test(abbr)) return "green";
+  if (/^(i|ind|npa)$/.test(abbr)) return "independent";
   if (/democrat/.test(l)) return "democratic";
   if (/republican|\bgop\b/.test(l)) return "republican";
   if (/libertarian/.test(l)) return "libertarian";

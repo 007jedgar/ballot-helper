@@ -102,11 +102,11 @@ export default function UploadPage() {
         cost = json.cost ?? 0;
       }
       if (!ok) throw new Error(json.error);
-      const ballot: BallotExtract = json.ballot;
+      const ballot: Parameters<typeof setBallot>[0] = json.ballot;
       // No original file to fill in, so the review page offers the generated PDF.
       await clearOriginal();
       setBallot(ballot, ballot.electionName ?? "Sample ballot", cost, foundBy);
-      router.push("/setup");
+      router.push("/confirm");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lookup failed");
     } finally {

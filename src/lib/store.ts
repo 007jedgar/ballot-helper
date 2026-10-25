@@ -3,13 +3,15 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BallotExtract, CandidateResearch, ContestExtract, MeasureResearch } from "./schema";
+import type { BallotExtract, BallotSource, CandidateResearch, ContestExtract, MeasureResearch } from "./schema";
 import { DEFAULT_PREFS, straightTicketPicks, type Party, type Prefs } from "./prefs";
 import type { ShareSnapshot } from "./share-schema";
 
 // `category` is optional: ballots saved before it existed don't have it (see categoryOf).
-export type Contest = Omit<ContestExtract, "category"> & Partial<Pick<ContestExtract, "category">> & { id: string; page?: number };
-export type Ballot = Omit<BallotExtract, "contests"> & { contests: Contest[] };
+export type Contest = Omit<ContestExtract, "category"> &
+  Partial<Pick<ContestExtract, "category">> & { id: string; page?: number; sourceUrl?: string | null };
+/** `sources` is set for looked-up ballots: where the contests came from. */
+export type Ballot = Omit<BallotExtract, "contests"> & { contests: Contest[]; sources?: BallotSource[] };
 
 export type Job<T> = {
   status: "idle" | "loading" | "done" | "error";
@@ -44,13 +46,16 @@ type State = {
   exported: boolean;
   supportDismissed: boolean;
   setBallot: (
-    ballot: Omit<BallotExtract, "contests"> & { contests: Omit<Contest, "id">[] },
+    ballot: Omit<Ballot, "contests"> & { contests: Omit<Contest, "id">[] },
     fileName: string,
     parseCost?: number,
     foundBy?: string | null,
   ) => void;
   importShare: (share: ShareSnapshot) => void;
   removeContest: (id: string) => void;
+  /** Ballot corrections before research starts (candidate indexes key research jobs, so not after). */
+  removeCandidate: (contestId: string, index: number) => void;
+  setCandidateParty: (contestId: string, index: number, party: string | null) => void;
   setCandidateJob: (key: string, job: Job<CandidateResearch>) => void;
   setMeasureJob: (id: string, job: Job<MeasureResearch>) => void;
   toggleChoice: (contestId: string, value: string, voteFor: number) => void;
@@ -114,6 +119,28 @@ export const useBallot = create<State>()(
         }),
       removeContest: (id) =>
         set((s) => (s.ballot ? { ballot: { ...s.ballot, contests: s.ballot.contests.filter((c) => c.id !== id) } } : {})),
+      removeCandidate: (contestId, index) =>
+        set((s) => {
+          if (!s.ballot) return {};
+          const contests = s.ballot.contests
+            .map((c) => (c.id === contestId ? { ...c, candidates: c.candidates.filter((_, i) => i !== index) } : c))
+            // A race with nobody left in it isn't on the ballot.
+            .filter((c) => c.kind === "measure" || c.candidates.length);
+          return { ballot: { ...s.ballot, contests } };
+        }),
+      setCandidateParty: (contestId, index, party) =>
+        set((s) =>
+          s.ballot
+            ? {
+                ballot: {
+                  ...s.ballot,
+                  contests: s.ballot.contests.map((c) =>
+                    c.id === contestId ? { ...c, candidates: c.candidates.map((x, i) => (i === index ? { ...x, party } : x)) } : c,
+                  ),
+                },
+              }
+            : {},
+        ),
       setCandidateJob: (key, job) => set((s) => ({ candidates: { ...s.candidates, [key]: job } })),
       setMeasureJob: (id, job) => set((s) => ({ measures: { ...s.measures, [id]: job } })),
       toggleChoice: (contestId, value, voteFor) =>

@@ -48,7 +48,6 @@ export default function SetupPage() {
   const router = useRouter();
   const hydrated = useHydrated();
   const ballot = useBallot((s) => s.ballot);
-  const foundBy = useBallot((s) => s.foundBy);
   const saved = useBallot((s) => s.prefs);
   const confirmPrefs = useBallot((s) => s.confirmPrefs);
   const [draft, setDraft] = useState<Prefs | null>(null);
@@ -83,14 +82,6 @@ export default function SetupPage() {
       <p className="mt-2 text-[13px] text-muted">
         Narrowing this down makes research faster and cheaper. Anything you skip can still be researched later from the comparison screen.
       </p>
-
-      {foundBy && (
-        <p className="mt-5 rounded-xl border border-warn/30 bg-warn/10 p-4 text-[13px] leading-relaxed text-fg/90">
-          We built this ballot by searching the web for races in {foundBy}, not from an official sample ballot. An area can
-          include several districts, so some of these races may not be on your ballot, and a few could be missing. Check it
-          against your county&apos;s official sample ballot. You can remove races that don&apos;t apply on the next screen.
-        </p>
-      )}
 
       {partisan && (
         <Section title="Do you usually vote a straight ticket?" hint="In partisan races we'll only check your party's candidates, for qualifications and red flags.">
