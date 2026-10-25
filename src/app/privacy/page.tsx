@@ -26,6 +26,10 @@ export default function PrivacyPage() {
           We don&apos;t keep the file.
         </li>
         <li>
+          <strong>Your address</strong>, if you look up your ballot by address, is sent to our server and to Google&apos;s
+          Civic Information API only to find your sample ballot. We don&apos;t keep it.
+        </li>
+        <li>
           <strong>Research requests</strong> contain candidate and measure names, offices, and your ballot&apos;s
           election and jurisdiction. Finished research is about public candidates and measures, not about you, and is
           cached for up to 30 days so other voters with the same races don&apos;t trigger it again.
@@ -50,6 +54,10 @@ export default function PrivacyPage() {
         <li>
           <strong>Anthropic</strong> (Claude AI) reads ballots and generates research. Under Anthropic&apos;s commercial
           terms, data sent through its API isn&apos;t used to train its models.
+        </li>
+        <li>
+          <strong>Google</strong> (Civic Information API) returns the sample ballot for an address you look up.
+          Google&apos;s privacy policy applies to that request.
         </li>
         <li>
           <strong>Vercel</strong> hosts the site and stores the research cache and share links.

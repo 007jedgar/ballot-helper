@@ -10,6 +10,8 @@ import type { BallotExtract } from "@/lib/schema";
 import { apiHeaders } from "@/lib/device";
 import { useBallot, useHydrated } from "@/lib/store";
 
+const addressLookup = process.env.NEXT_PUBLIC_ADDRESS_LOOKUP === "1";
+
 export default function UploadPage() {
   const router = useRouter();
   const hydrated = useHydrated();
@@ -22,6 +24,8 @@ export default function UploadPage() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [address, setAddress] = useState("");
+  const [noData, setNoData] = useState(false);
 
   const upload = useCallback(
     async (raw: File) => {
@@ -64,6 +68,33 @@ export default function UploadPage() {
     },
     [router, setBallot],
   );
+
+  const lookup = async () => {
+    setError(null);
+    setNoData(false);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/lookup-ballot", {
+        method: "POST",
+        body: JSON.stringify({ address }),
+        headers: { ...apiHeaders(), "content-type": "application/json" },
+      });
+      const json = await res.json().catch(() => ({ error: `Lookup failed (${res.status})` }));
+      if (!res.ok) {
+        setNoData(res.status === 404);
+        throw new Error(json.error);
+      }
+      const ballot: BallotExtract = json.ballot;
+      // No original file to fill in, so the review page offers the generated PDF.
+      await clearOriginal();
+      setBallot(ballot, ballot.electionName ?? "Sample ballot", 0);
+      router.push("/setup");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Lookup failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="glow">
@@ -109,9 +140,11 @@ export default function UploadPage() {
             <div className="flex flex-col items-center gap-3 text-muted">
               <Spinner className="h-5 w-5" />
               <p className="text-sm">
-                {progress && progress.total > 1
-                  ? `Reading your ballot… ${progress.done}/${progress.total} pages`
-                  : "Reading your ballot… this can take a minute."}
+                {!progress
+                  ? "Looking up your ballot…"
+                  : progress.total > 1
+                    ? `Reading your ballot… ${progress.done}/${progress.total} pages`
+                    : "Reading your ballot… this can take a minute."}
               </p>
             </div>
           ) : (
@@ -135,7 +168,54 @@ export default function UploadPage() {
             </>
           )}
         </div>
+
+        {addressLookup && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!busy && address.trim()) void lookup();
+            }}
+            className="mt-4"
+          >
+            <label htmlFor="address" className="text-[13px] text-muted">
+              No sample ballot handy? Look it up by your home address.
+            </label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input
+                id="address"
+                type="text"
+                autoComplete="street-address"
+                placeholder="123 Main St, Columbus, OH 43215"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                disabled={busy}
+                className="h-9 w-full min-w-0 rounded-lg sm:flex-1 border border-line bg-surface px-3 text-[13px] placeholder:text-faint focus:border-line-strong focus:outline-none"
+              />
+              <Button type="submit" variant="secondary" disabled={busy || !address.trim()}>
+                Find my ballot
+              </Button>
+            </div>
+            <p className="mt-2 text-[11px] text-faint">
+              Your address is sent to Google&apos;s Civic Information API for this lookup and isn&apos;t stored. Coverage
+              depends on your county.
+            </p>
+          </form>
+        )}
+
         {error && <p className="mt-4 text-sm text-bad">{error}</p>}
+        {noData && (
+          <p className="mt-2 text-[13px] text-muted">
+            Try{" "}
+            <a href="https://www.vote411.org/ballot" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-fg">
+              VOTE411
+            </a>{" "}
+            or{" "}
+            <a href="https://ballotpedia.org/Sample_Ballot_Lookup" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-fg">
+              Ballotpedia
+            </a>{" "}
+            or your county elections office&apos;s website. Save or screenshot your sample ballot there, then upload it above.
+          </p>
+        )}
 
         {hydrated && existing && !busy && (
           <div className="mt-6 flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
