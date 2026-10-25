@@ -2,6 +2,7 @@ import { z } from "zod";
 import { checkBudget, rateLimit, recordSpend, sameSite } from "@/lib/abuse";
 import { analyzeNotes, gatherNotes } from "@/lib/ai";
 import { cachePath, candidatePath, readCache, writeCache } from "@/lib/cache";
+import { attributeSavedCriticisms, type SavedResearch } from "@/lib/backfill";
 import { costed, errorResponse } from "@/lib/http";
 import { mockCandidate, mockEnabled } from "@/lib/mock";
 import { TOPICS, isFullTopics, normalizeTopics } from "@/lib/prefs";
@@ -68,8 +69,11 @@ export async function POST(req: Request) {
       };
       const lookups = full ? [fullPath, cachePath("candidate", legacy)] : [path, fullPath, cachePath("candidate", { ...legacy, ...topicKey })];
       for (const p of lookups) {
-        const cached = await readCache(p);
-        if (cached) return Response.json({ research: cached.data, cached: true, cost: cached.cost });
+        const cached = await readCache<SavedResearch>(p);
+        if (cached) {
+          const research = await attributeSavedCriticisms(p, cached, input);
+          return Response.json({ research, cached: true, cost: cached.cost });
+        }
       }
     }
     // New (uncached) work: count it against limits; only gathering is stopped by the daily budget,

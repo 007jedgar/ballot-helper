@@ -120,6 +120,19 @@ export async function extractFromFile<S extends z.ZodType>(
   return { value: parseJson(schema, res.choices[0]?.message?.content), cost: null };
 }
 
+/** A small structured task on the quick model (Claude only; null with Groq). */
+export async function quickStructured<S extends z.ZodType>(schema: S, prompt: string): Promise<Costed<z.infer<S>> | null> {
+  if (requireProvider() !== "claude") return null;
+  const res = await claude().beta.messages.parse({
+    model: MODELS.extract,
+    max_tokens: 4000,
+    output_config: { effort: "low", format: betaZodOutputFormat(schema) },
+    messages: [{ role: "user", content: prompt }],
+  });
+  if (!res.parsed_output) return null;
+  return { value: res.parsed_output as z.infer<S>, cost: costOf(res.model, res.usage) };
+}
+
 // ---------------------------------------------------------------------------
 // Web research -> structured result (two passes: research notes, then JSON)
 // ---------------------------------------------------------------------------

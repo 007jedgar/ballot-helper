@@ -60,8 +60,8 @@ export const candidatePath = (name: string, place: Place, extra: Record<string, 
 export const measurePath = (title: string, district: string | null | undefined, place: Place) =>
   cachePath("measure", { title: wordsKey(`${title} ${district ?? ""}`), ...placeFields(place) }, 2);
 
-/** A cached result and what it cost to produce originally (null for older entries). */
-export type CacheEntry<T> = { data: T; cost: number | null };
+/** A cached result, what it cost to produce originally (null for older entries), and when it expires. */
+export type CacheEntry<T> = { data: T; cost: number | null; savedAt: number; ttlDays: number };
 
 export async function readCache<T>(path: string): Promise<CacheEntry<T> | null> {
   if (!enabled()) return null;
@@ -69,20 +69,25 @@ export async function readCache<T>(path: string): Promise<CacheEntry<T> | null> 
     // Bypass the CDN so an entry refreshed after expiry is seen right away.
     const res = await get(path, { access: "private", useCache: false });
     if (!res || res.statusCode !== 200) return null;
-    const entry = JSON.parse(await new Response(res.stream).text()) as { data: T; cost?: number; ttlDays?: number };
-    if (Date.now() - res.blob.uploadedAt.getTime() > (entry.ttlDays ?? TTL_DAYS) * DAY_MS) return null;
-    return { data: entry.data, cost: entry.cost ?? null };
+    const entry = JSON.parse(await new Response(res.stream).text()) as { data: T; cost?: number; ttlDays?: number; savedAt?: number };
+    const savedAt = entry.savedAt ?? res.blob.uploadedAt.getTime();
+    const ttlDays = entry.ttlDays ?? TTL_DAYS;
+    if (Date.now() - savedAt > ttlDays * DAY_MS) return null;
+    return { data: entry.data, cost: entry.cost ?? null, savedAt, ttlDays };
   } catch (err) {
     console.warn("research cache read failed", err);
     return null;
   }
 }
 
-/** `ttlDays` shortens the default 30 days, e.g. for thin results worth refreshing sooner. */
-export async function writeCache(path: string, data: unknown, cost: number | null, ttlDays = TTL_DAYS) {
+/**
+ * `ttlDays` shortens the default 30 days, e.g. for thin results worth refreshing
+ * sooner. `savedAt` keeps an updated entry's original age, so it still expires on time.
+ */
+export async function writeCache(path: string, data: unknown, cost: number | null, ttlDays = TTL_DAYS, savedAt = Date.now()) {
   if (!enabled()) return;
   try {
-    await put(path, JSON.stringify({ data, ttlDays, ...(cost != null ? { cost } : {}) }), {
+    await put(path, JSON.stringify({ data, ttlDays, savedAt, ...(cost != null ? { cost } : {}) }), {
       access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,
