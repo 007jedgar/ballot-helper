@@ -62,6 +62,19 @@ Every Claude call's approximate cost is computed from its token usage (list pric
 
 After a voter exports their ballot, a small, dismissable card says what the AI research behind it cost and offers to "chip in". It shows once per ballot, never blocks anything, and stays hidden unless a link is configured. A "Support this project" link also appears in the footer. To turn it on, create a Stripe Payment Link with **"Let customers choose what to pay"** (suggested amount $5) and set `NEXT_PUBLIC_SUPPORT_URL`. Optionally, set `NEXT_PUBLIC_SUPPORT_URL_3/_5/_10/_20` to fixed-amount links for one-tap $3/$5/$10/$20 buttons. These are build-time variables, so redeploy after setting them. The copy calls it support, not a donation, since contributions aren't tax-deductible.
 
+## Abuse protection
+
+- **Vercel Firewall:** per-IP rate limits on `/api/*` at the edge.
+- **Same-site check:** API calls must come from the site's own pages.
+- **Per-IP and per-device limits** on ballot uploads, new research and share links, enforced in `src/lib/abuse.ts`. Device = a random ID in the browser. IP limits are looser because voters can share an IP. Cache hits don't count.
+- **Daily spend cap** (`DAILY_BUDGET_USD`, default $100). Once today's AI spend reaches it, new research pauses until midnight UTC; cached results still load.
+
+Counters are shared across servers when Upstash Redis is connected (free tier, via the Vercel Marketplace). Without it, each server instance counts on its own. IPs and device IDs are stored only as salted hashes.
+
+## Legal pages
+
+`/terms` and `/privacy` describe what the app does. Set `NEXT_PUBLIC_CONTACT_EMAIL` so they show a contact address. They're a reasonable starting point, not legal advice.
+
 ## Layout
 
 ```

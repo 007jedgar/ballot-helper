@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ShareSnapshot } from "@/lib/share-schema";
+import { apiHeaders } from "@/lib/device";
 import { useBallot } from "@/lib/store";
 import { Button } from "./ui";
 
@@ -50,7 +51,7 @@ export function ShareButton({ variant = "secondary" }: { variant?: "primary" | "
       };
       const res = await fetch("/api/share", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: apiHeaders({ "content-type": "application/json" }),
         body: JSON.stringify(snapshot),
       });
       const json = await res.json().catch(() => ({ error: `Couldn't create link (${res.status})` }));

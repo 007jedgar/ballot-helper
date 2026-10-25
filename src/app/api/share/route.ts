@@ -1,3 +1,4 @@
+import { rateLimit, sameSite } from "@/lib/abuse";
 import { errorResponse } from "@/lib/http";
 import { ShareSnapshotSchema } from "@/lib/share-schema";
 import { createShare, sharingEnabled } from "@/lib/shares";
@@ -5,6 +6,8 @@ import { createShare, sharingEnabled } from "@/lib/shares";
 const MAX_BYTES = 4 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  const blocked = sameSite(req) ?? (await rateLimit(req, "share"));
+  if (blocked) return blocked;
   if (!sharingEnabled()) return Response.json({ error: "Sharing isn't set up on this server (no Blob store connected)." }, { status: 501 });
   const text = await req.text();
   if (text.length > MAX_BYTES) return Response.json({ error: "This ballot is too large to share." }, { status: 413 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkBudget, rateLimit, recordSpend, sameSite } from "@/lib/abuse";
 import { analyzeNotes, gatherNotes } from "@/lib/ai";
 import { cachePath, readCache, writeCache } from "@/lib/cache";
 import { costed, errorResponse } from "@/lib/http";
@@ -28,11 +29,16 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
+  const crossSite = sameSite(req);
+  if (crossSite) return crossSite;
   const body = Body.safeParse(await req.json().catch(() => null));
   if (!body.success) return Response.json({ error: "Invalid request." }, { status: 400 });
   const { notes, gatherCost, ...input } = body.data;
   try {
     if (mockEnabled()) {
+      const limited = (await rateLimit(req, "research")) ?? (notes ? null : await checkBudget());
+      if (limited) return limited;
+      await recordSpend(notes ? 0.05 : 0.03);
       if (!notes) return Response.json({ notes: "mock notes", cost: 0.03 });
       return Response.json({ research: await mockMeasure(input.title), cost: 0.05 + (gatherCost ?? 0) });
     }
@@ -49,14 +55,19 @@ export async function POST(req: Request) {
       const cached = await readCache(path);
       if (cached) return Response.json({ research: cached.data, cached: true, cost: cached.cost });
     }
+    // New (uncached) work: count it against limits; only gathering is stopped by the daily budget,
+    // so a candidate whose notes were already gathered can still finish.
+    const blocked = (await rateLimit(req, "research")) ?? (notes ? null : await checkBudget());
+    if (blocked) return blocked;
     const task = measureTask(input);
-    if (!notes) return Response.json(costed("gather", await gatherNotes(RESEARCH_SYSTEM, task), "notes"));
+    if (!notes) return Response.json(await costed("gather", await gatherNotes(RESEARCH_SYSTEM, task), "notes"));
     const analyzed = await analyzeNotes(MeasureResearchSchema, {
       task,
       notes,
       structureHint: MEASURE_STRUCTURE,
       tier: "measure",
     });
+    await recordSpend(analyzed.cost);
     const research = analyzed.value;
     const cost = analyzed.cost == null ? null : analyzed.cost + (gatherCost ?? 0);
     await writeCache(path, research, cost, research.confidence === "low" ? 7 : undefined);

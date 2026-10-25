@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkBudget, rateLimit, recordSpend, sameSite } from "@/lib/abuse";
 import { analyzeNotes, gatherNotes } from "@/lib/ai";
 import { cachePath, readCache, writeCache } from "@/lib/cache";
 import { costed, errorResponse } from "@/lib/http";
@@ -34,6 +35,8 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
+  const crossSite = sameSite(req);
+  if (crossSite) return crossSite;
   const body = Body.safeParse(await req.json().catch(() => null));
   if (!body.success) return Response.json({ error: "Invalid request." }, { status: 400 });
   const { notes, gatherCost, topics: requested, ...input } = body.data;
@@ -41,6 +44,9 @@ export async function POST(req: Request) {
   const full = isFullTopics(topics);
   try {
     if (mockEnabled()) {
+      const limited = (await rateLimit(req, "research")) ?? (notes ? null : await checkBudget());
+      if (limited) return limited;
+      await recordSpend(notes ? 0.05 : 0.03);
       if (!notes) return Response.json({ notes: "mock notes", cost: 0.03 });
       const research = await mockCandidate(input.name, input.party, input.isJudicial, full ? [] : topics);
       return Response.json({ research, cost: 0.05 + (gatherCost ?? 0) });
@@ -62,8 +68,12 @@ export async function POST(req: Request) {
       const cached = (await readCache(path)) ?? (full ? null : await readCache(fullPath));
       if (cached) return Response.json({ research: cached.data, cached: true, cost: cached.cost });
     }
+    // New (uncached) work: count it against limits; only gathering is stopped by the daily budget,
+    // so a candidate whose notes were already gathered can still finish.
+    const blocked = (await rateLimit(req, "research")) ?? (notes ? null : await checkBudget());
+    if (blocked) return blocked;
     const task = candidateTask(input, topics);
-    if (!notes) return Response.json(costed("gather", await gatherNotes(RESEARCH_SYSTEM, task, researchBudget(topics)), "notes"));
+    if (!notes) return Response.json(await costed("gather", await gatherNotes(RESEARCH_SYSTEM, task, researchBudget(topics)), "notes"));
     const analyzed = await analyzeNotes(CandidateResearchSchema, {
       task,
       notes,
@@ -71,6 +81,7 @@ export async function POST(req: Request) {
       tier: "candidate",
       effort: topics.length <= 2 ? "low" : "medium",
     });
+    await recordSpend(analyzed.cost);
     const research = analyzed.value;
     const cost = analyzed.cost == null ? null : analyzed.cost + (gatherCost ?? 0);
     // Thin results (often obscure candidates) are still worth reusing, just not for as long.

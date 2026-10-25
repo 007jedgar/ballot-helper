@@ -40,6 +40,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="border-t border-line py-6 text-center text-xs text-faint print:hidden">
           AI-generated summaries can be wrong. Check sources before you vote.
           <SupportFooterLink />
+          <span className="mt-2 block">
+            <Link href="/terms" className="hover:text-muted">
+              Terms
+            </Link>
+            {" · "}
+            <Link href="/privacy" className="hover:text-muted">
+              Privacy
+            </Link>
+          </span>
         </footer>
       </body>
     </html>

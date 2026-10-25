@@ -7,6 +7,7 @@ import { Button, Spinner, buttonClass } from "@/components/ui";
 import { clearOriginal, saveOriginal } from "@/lib/file-store";
 import { mergeBallots, prepareUploads } from "@/lib/prepare-file";
 import type { BallotExtract } from "@/lib/schema";
+import { apiHeaders } from "@/lib/device";
 import { useBallot, useHydrated } from "@/lib/store";
 
 export default function UploadPage() {
@@ -35,7 +36,7 @@ export default function UploadPage() {
         const readPage = async (i: number) => {
           const form = new FormData();
           form.append("file", uploads[i]);
-          const res = await fetch("/api/parse-ballot", { method: "POST", body: form });
+          const res = await fetch("/api/parse-ballot", { method: "POST", body: form, headers: apiHeaders() });
           const json = await res.json().catch(() => ({ error: `Upload failed (${res.status})` }));
           if (!res.ok) throw new Error(uploads.length > 1 ? `Page ${i + 1}: ${json.error}` : json.error);
           parts[i] = json.ballot;
@@ -120,6 +121,17 @@ export default function UploadPage() {
               </div>
               <p className="text-sm font-medium">Drop your sample ballot here</p>
               <p className="mt-1 text-[13px] text-faint">PDF, screenshot, or photo · stays in your browser except for analysis</p>
+              <p className="mt-3 text-[11px] text-faint">
+                By uploading you agree to the{" "}
+                <Link href="/terms" onClick={(e) => e.stopPropagation()} className="underline underline-offset-2 hover:text-muted">
+                  Terms
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" onClick={(e) => e.stopPropagation()} className="underline underline-offset-2 hover:text-muted">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
             </>
           )}
         </div>

@@ -1,3 +1,4 @@
+import { checkBudget, rateLimit, sameSite } from "@/lib/abuse";
 import { extractFromFile } from "@/lib/ai";
 import { costed, errorResponse } from "@/lib/http";
 import { mockBallot, mockEnabled } from "@/lib/mock";
@@ -9,6 +10,8 @@ export const maxDuration = 300;
 const ALLOWED = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export async function POST(req: Request) {
+  const blocked = sameSite(req) ?? (await rateLimit(req, "parse")) ?? (await checkBudget());
+  if (blocked) return blocked;
   try {
     const form = await req.formData();
     const file = form.get("file");
@@ -19,7 +22,7 @@ export async function POST(req: Request) {
     if (mockEnabled()) return Response.json({ ballot: await mockBallot(), cost: 0.004 });
     const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
     const result = await extractFromFile(BallotSchema, { mediaType: file.type, base64 }, BALLOT_EXTRACTION);
-    return Response.json(costed("extract", result, "ballot"));
+    return Response.json(await costed("extract", result, "ballot"));
   } catch (err) {
     return errorResponse(err);
   }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { isFullTopics, planContest, type Prefs, type Topic } from "./prefs";
+import { apiHeaders } from "./device";
 import type { CandidateResearch, MeasureResearch } from "./schema";
 import { candidateKey, useBallot, type Ballot, type Contest, type Job } from "./store";
 
@@ -55,7 +56,11 @@ export function jobState(job: ResearchJob): Job<unknown> {
 }
 
 async function postOnce(url: string, body: unknown): Promise<Record<string, unknown>> {
-  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: apiHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify(body),
+  });
   const json = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
   if (!res.ok) throw Object.assign(new Error(json.error ?? `Request failed (${res.status})`), { status: res.status });
   return json;
@@ -142,6 +147,8 @@ async function run(job: ResearchJob, ballot: Ballot) {
   } catch (err) {
     if (unloading) return;
     const error = err instanceof Error ? err.message : "Research failed";
+    // Rate limit or daily budget: stop the queue instead of failing every remaining job.
+    if ((err as { status?: number }).status === 429) useBallot.getState().setPaused(true);
     const s = useBallot.getState();
     if (job.kind === "measure") s.setMeasureJob(job.key, { status: "error", error });
     else s.setCandidateJob(job.key, { status: "error", error });

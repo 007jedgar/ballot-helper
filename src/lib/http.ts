@@ -1,10 +1,12 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { recordSpend } from "./abuse";
 import { ConfigError, ResearchFailedError, type Costed } from "./ai";
 
 /** JSON body `{ [key]: value, cost }`, logging the cost for the Vercel logs. */
-export function costed<T>(step: string, result: Costed<T>, key: string) {
+export async function costed<T>(step: string, result: Costed<T>, key: string) {
   if (result.cost != null) console.info(`[cost] ${step} $${result.cost.toFixed(4)}`);
+  await recordSpend(result.cost);
   return { [key]: result.value, cost: result.cost };
 }
 
