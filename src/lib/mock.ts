@@ -54,7 +54,7 @@ export async function mockCandidate(
 ): Promise<CandidateResearch> {
   const r = await mockCandidateFull(name, party, isJudicial);
   if (!topics.length) return r;
-  const keep = (t: string, v: string[]) => (topics.includes(t) ? v : []);
+  const keep = <T,>(t: string, v: T[]) => (topics.includes(t) ? v : []);
   return {
     ...r,
     qualifications: keep("qualifications", r.qualifications),
@@ -84,7 +84,10 @@ async function mockCandidateFull(name: string, party: string | null | undefined,
     keyPositions: ["Freeze property tax rates through 2028", "Hire 200 additional EMS staff", "Expand broadband to rural townships", "Opposes new statewide sales tax"],
     endorsements: ["Ohio AFL-CIO", "Columbus Dispatch editorial board", "Fraternal Order of Police Lodge 9", "Sierra Club Ohio"],
     accomplishments: incumbent ? ["Sponsored 2023 housing trust fund ($50M)", "Led audit that recovered $3.2M in overpayments"] : [],
-    criticisms: ["Missed 18% of votes in 2025 session", "Accepted donations from contractors later awarded city work (Dispatch, 2025)"],
+    criticisms: [
+      { text: "Accepted donations from contractors later awarded city work (Dispatch, 2025)", from: "press", by: "Columbus Dispatch" },
+      { text: "Opponent says they missed 18% of votes in the 2025 session", from: "opponent", by: "Rival campaign" },
+    ],
     redFlags:
       seed % 3 === 0
         ? [

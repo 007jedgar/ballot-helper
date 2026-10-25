@@ -69,8 +69,18 @@ export const CandidateResearchSchema = z.object({
     .array(z.string())
     .describe("Incumbents only: concrete things done in office (bills, votes, rulings, programs). Empty if not incumbent"),
   criticisms: z
-    .array(z.string())
-    .describe("Substantive criticisms, controversies, or weaknesses raised by opponents, press, or watchdogs"),
+    .array(
+      z.object({
+        text: z.string().describe("The criticism. For opponent-only claims, phrase it as their claim, e.g. 'Opponent says ...'"),
+        from: z
+          .enum(["opponent", "press", "watchdog", "official", "other"])
+          .describe(
+            "Who raised it. opponent = only a rival candidate, their campaign, or groups backing them, with no independent confirmation in the notes. If press reporting or official records back it up, use press/official instead",
+          ),
+        by: z.string().nullable().describe("Who said it, e.g. 'Jane Doe campaign' or 'Houston Chronicle'"),
+      }),
+    )
+    .describe("Substantive criticisms, controversies, or weaknesses, each with who raised it. Independently sourced ones first"),
   redFlags: z
     .array(
       z.object({

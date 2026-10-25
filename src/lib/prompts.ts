@@ -64,7 +64,8 @@ export function candidateTask(
     want.has("positions") && "Key policy positions/priorities (from their own site where possible).",
     want.has("record") && "If incumbent: concrete accomplishments in office (bills, votes, rulings, programs).",
     want.has("endorsements") && "Notable endorsements.",
-    want.has("criticisms") && "Substantive criticisms or controversies raised by opponents, press, or watchdogs.",
+    want.has("criticisms") &&
+      "Substantive criticisms or controversies raised by press, watchdogs, official records, or opponents. Note who made each one. Attacks from an opponent, their campaign, or groups backing them are often one-sided: say that's where they came from, and check whether independent reporting or official records back them up.",
     want.has("news") && "Up to 5 recent relevant news articles (title, outlet, date, URL).",
     want.has("redFlags") &&
       `Red flags, with sources:
@@ -98,7 +99,7 @@ export function researchBudget(topics: readonly Topic[]) {
 }
 
 export function candidateStructure(topics: readonly Topic[] = TOPICS) {
-  const base = `Convert the research notes into the candidate profile schema. Each bullet: one short, specific line (aim for under 20 words). Prefer specifics (numbers, years, names) over adjectives. If notes are thin or ambiguous about identity, set confidence to "low". redFlags: include only documented items from the notes (pending charges may be included if the title says "pending"); never infer a conflict from party affiliation or ideology alone.`;
+  const base = `Convert the research notes into the candidate profile schema. Each bullet: one short, specific line (aim for under 20 words). Prefer specifics (numbers, years, names) over adjectives. If notes are thin or ambiguous about identity, set confidence to "low". redFlags: include only documented items from the notes (pending charges may be included if the title says "pending"); never infer a conflict from party affiliation or ideology alone. criticisms: give little weight to claims made only by an opponent, their campaign, or groups backing them: mark them from "opponent", phrase them as the opponent's claim, list them after independently sourced criticisms, and include at most 2. If independent reporting or official records in the notes confirm a claim, attribute it to that source instead.`;
   if (isFullTopics(topics)) return base;
   const fields: Record<Topic, string> = {
     qualifications: "qualifications",

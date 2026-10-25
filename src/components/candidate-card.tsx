@@ -2,7 +2,7 @@
 
 import type { CandidateResearch } from "@/lib/schema";
 import type { Job } from "@/lib/store";
-import { Bullets } from "./bullets";
+import { Bullets, type BulletItem } from "./bullets";
 import { Badge, Button, FlagIcon } from "./ui";
 
 export function CandidateCard({
@@ -97,7 +97,7 @@ export function CandidateCard({
             <Bullets title="Qualifications" items={r.qualifications} />
             <Bullets title="Positions" items={r.keyPositions} />
             {r.isIncumbent && <Bullets title="Record in office" items={r.accomplishments} tone="good" />}
-            <Bullets title="Criticisms" items={r.criticisms} tone="bad" limit={3} />
+            <Bullets title="Criticisms" items={criticismItems(r.criticisms)} tone="bad" limit={3} />
             <Bullets title="Endorsements" items={r.endorsements} limit={3} />
             <Links r={r} />
           </>
@@ -215,5 +215,19 @@ function Links({ r }: { r: CandidateResearch }) {
         </details>
       )}
     </div>
+  );
+}
+
+/**
+ * Independently sourced criticisms first; claims made only by an opponent are
+ * labeled as such and dimmed, since they may be one-sided. Research saved
+ * before criticisms were attributed is a plain list of strings.
+ */
+function criticismItems(list: CandidateResearch["criticisms"] | string[]): BulletItem[] {
+  const items = list.map((c) => (typeof c === "string" ? { text: c, from: "other" as const, by: null } : c));
+  return [...items.filter((c) => c.from !== "opponent"), ...items.filter((c) => c.from === "opponent")].map((c) =>
+    c.from === "opponent"
+      ? { text: c.text, tag: "Opponent's claim", muted: true }
+      : { text: c.text },
   );
 }
