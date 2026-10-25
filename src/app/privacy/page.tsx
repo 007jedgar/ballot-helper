@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { Contact, LegalPage } from "@/components/legal";
 
-export const metadata: Metadata = { title: "Privacy Policy · Ballot Helper" };
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "What Ballot Helper does with your sample ballot and data: no accounts, no ads, and as little information as possible.",
+  alternates: { canonical: "/privacy" },
+  openGraph: { title: "Privacy Policy · Ballot Helper", url: "/privacy", siteName: "Ballot Helper", type: "website", images: "/opengraph-image" },
+};
 
 export default function PrivacyPage() {
   return (

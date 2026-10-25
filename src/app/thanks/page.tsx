@@ -4,9 +4,10 @@ import { Logo } from "@/components/logo";
 import { buttonClass } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Thank you · Ballot Helper",
+  title: "Thank you",
   // A post-payment landing page; keep it out of search results.
   robots: { index: false },
+  alternates: {},
 };
 
 /** Where Stripe Payment Links redirect after a contribution. */

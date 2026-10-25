@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Contact, LegalPage } from "@/components/legal";
 
-export const metadata: Metadata = { title: "Terms of Service · Ballot Helper" };
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "The terms for using Ballot Helper, a free, nonpartisan sample ballot research tool.",
+  alternates: { canonical: "/terms" },
+  openGraph: { title: "Terms of Service · Ballot Helper", url: "/terms", siteName: "Ballot Helper", type: "website", images: "/opengraph-image" },
+};
 
 export default function TermsPage() {
   return (

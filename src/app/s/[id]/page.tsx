@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui";
 import { readShare } from "@/lib/shares";
+import { NOINDEX } from "@/lib/site";
 import { OpenShared } from "./open-shared";
 
 type Props = { params: Promise<{ id: string }> };
@@ -11,11 +12,19 @@ const placeOf = (b: { jurisdiction: string | null; county: string | null; state:
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const share = await readShare((await params).id);
-  if (!share) return { title: "Shared ballot · Ballot Helper" };
+  // Shared ballots are people's own picks: reachable by link, kept out of search.
+  if (!share) return { title: "Shared ballot", robots: NOINDEX };
   const title = `${share.ballot.electionName ?? "Ballot"} research${share.ballot.county ? ` · ${share.ballot.county}` : ""}`;
   const n = share.ballot.contests.length;
   const description = `Nonpartisan research on ${n} ${n === 1 ? "race" : "races and measures"}${placeOf(share.ballot) ? ` for ${placeOf(share.ballot)}` : ""}. Open it to compare candidates and pick.`;
-  return { title: `${title} · Ballot Helper`, description, openGraph: { title, description }, twitter: { title, description } };
+  return {
+    title,
+    description,
+    robots: NOINDEX,
+    alternates: { canonical: `/s/${(await params).id}` },
+    openGraph: { title, description, url: `/s/${(await params).id}` },
+    twitter: { title, description },
+  };
 }
 
 export default async function SharedBallotPage({ params }: Props) {
