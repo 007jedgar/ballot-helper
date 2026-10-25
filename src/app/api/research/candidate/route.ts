@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { checkBudget, rateLimit, recordSpend, sameSite } from "@/lib/abuse";
 import { analyzeNotes, gatherNotes } from "@/lib/ai";
-import { cachePath, readCache, writeCache } from "@/lib/cache";
+import { cachePath, candidatePath, readCache, writeCache } from "@/lib/cache";
 import { costed, errorResponse } from "@/lib/http";
 import { mockCandidate, mockEnabled } from "@/lib/mock";
 import { TOPICS, isFullTopics, normalizeTopics } from "@/lib/prefs";
@@ -53,20 +53,24 @@ export async function POST(req: Request) {
     }
     // Step 1 checks the shared cache first; a hit skips both steps. A full
     // profile also satisfies a narrower request.
-    const identity = {
-      name: input.name,
-      office: input.office,
-      district: input.district,
-      state: input.election.state,
-      county: input.election.county,
-      electionDate: input.election.electionDate,
-    };
-    const fullPath = cachePath("candidate", identity);
-    // "v2" retired narrow entries cached before failed lookups were detected.
-    const path = full ? fullPath : cachePath("candidate", { ...identity, topics: topics.join(","), v: "2" });
+    const topicKey = { topics: topics.join(","), v: "2" };
+    const fullPath = candidatePath(input.name, input.election);
+    const path = full ? fullPath : candidatePath(input.name, input.election, topicKey);
     if (!notes) {
-      const cached = (await readCache(path)) ?? (full ? null : await readCache(fullPath));
-      if (cached) return Response.json({ research: cached.data, cached: true, cost: cached.cost });
+      // Entries written before v2 keys (which included the transcribed office) are still read.
+      const legacy = {
+        name: input.name,
+        office: input.office,
+        district: input.district,
+        state: input.election.state,
+        county: input.election.county,
+        electionDate: input.election.electionDate,
+      };
+      const lookups = full ? [fullPath, cachePath("candidate", legacy)] : [path, fullPath, cachePath("candidate", { ...legacy, ...topicKey })];
+      for (const p of lookups) {
+        const cached = await readCache(p);
+        if (cached) return Response.json({ research: cached.data, cached: true, cost: cached.cost });
+      }
     }
     // New (uncached) work: count it against limits; only gathering is stopped by the daily budget,
     // so a candidate whose notes were already gathered can still finish.

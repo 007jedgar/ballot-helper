@@ -232,9 +232,17 @@ async function claudeResearch(system: string, task: string, budget: SearchBudget
     if (text.length > 200 || (writeUp && text)) return { value: text, cost };
     if (writeUp) break;
 
-    // Ended without writing notes (e.g. after its last search): ask for them.
+    // Ended without writing notes (e.g. after its last search): ask for them. Any
+    // client-side tool call it left open needs a result before the next message.
+    const open = res.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
     messages.push({ role: "assistant", content: res.content });
-    messages.push({ role: "user", content: WRITE_UP });
+    messages.push({
+      role: "user",
+      content: [
+        ...open.map((b) => ({ type: "tool_result" as const, tool_use_id: b.id, is_error: true, content: "Not available." })),
+        { type: "text" as const, text: WRITE_UP },
+      ],
+    });
     writeUp = true;
   }
   throw new Error("Research returned no content.");
