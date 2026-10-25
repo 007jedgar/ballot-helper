@@ -106,7 +106,7 @@ export default function UploadPage() {
       // No original file to fill in, so the review page offers the generated PDF.
       await clearOriginal();
       setBallot(ballot, ballot.electionName ?? "Sample ballot", cost, foundBy);
-      router.push("/setup");
+      router.push("/confirm");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lookup failed");
     } finally {
