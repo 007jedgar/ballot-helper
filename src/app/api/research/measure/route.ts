@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { checkBudget, rateLimit, recordSpend, sameSite } from "@/lib/abuse";
 import { analyzeNotes, gatherNotes } from "@/lib/ai";
-import { cachePath, readCache, writeCache } from "@/lib/cache";
+import { cachePath, measurePath, readCache, writeCache } from "@/lib/cache";
 import { costed, errorResponse } from "@/lib/http";
 import { mockEnabled, mockMeasure } from "@/lib/mock";
 import { MEASURE_STRUCTURE, RESEARCH_SYSTEM, measureTask } from "@/lib/prompts";
@@ -43,16 +43,18 @@ export async function POST(req: Request) {
       return Response.json({ research: await mockMeasure(input.title), cost: 0.05 + (gatherCost ?? 0) });
     }
     // Step 1 checks the shared cache first; a hit skips both steps.
-    const path = cachePath("measure", {
-      title: input.title,
-      district: input.district,
-      text: input.text,
-      state: input.election.state,
-      county: input.election.county,
-      electionDate: input.election.electionDate,
-    });
+    const path = measurePath(input.title, input.district, input.election);
     if (!notes) {
-      const cached = await readCache(path);
+      // Entries written before v2 keys (which included the full transcribed text) are still read.
+      const legacy = cachePath("measure", {
+        title: input.title,
+        district: input.district,
+        text: input.text,
+        state: input.election.state,
+        county: input.election.county,
+        electionDate: input.election.electionDate,
+      });
+      const cached = (await readCache(path)) ?? (await readCache(legacy));
       if (cached) return Response.json({ research: cached.data, cached: true, cost: cached.cost });
     }
     // New (uncached) work: count it against limits; only gathering is stopped by the daily budget,
