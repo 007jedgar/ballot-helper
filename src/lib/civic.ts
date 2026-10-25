@@ -143,7 +143,7 @@ export function voterInfoToBallot(info: VoterInfo): BallotExtract {
 
 export async function lookupBallot(address: string): Promise<BallotExtract> {
   const key = process.env.GOOGLE_CIVIC_API_KEY;
-  if (!key) throw new LookupError("Address lookup isn't set up on this server. Upload your sample ballot instead.", 503);
+  if (!key) throw new LookupError(NO_DATA, 404);
   const url = new URL("https://www.googleapis.com/civicinfo/v2/voterinfo");
   url.searchParams.set("key", key);
   url.searchParams.set("address", address);

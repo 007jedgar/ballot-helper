@@ -26,6 +26,7 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [address, setAddress] = useState("");
   const [noData, setNoData] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   const upload = useCallback(
     async (raw: File) => {
@@ -73,26 +74,44 @@ export default function UploadPage() {
     setError(null);
     setNoData(false);
     setBusy(true);
-    try {
-      const res = await fetch("/api/lookup-ballot", {
+    const post = async (url: string, body: object) => {
+      const res = await fetch(url, {
         method: "POST",
-        body: JSON.stringify({ address }),
+        body: JSON.stringify(body),
         headers: { ...apiHeaders(), "content-type": "application/json" },
       });
       const json = await res.json().catch(() => ({ error: `Lookup failed (${res.status})` }));
-      if (!res.ok) {
-        setNoData(res.status === 404);
-        throw new Error(json.error);
+      return { ok: res.ok, json };
+    };
+    try {
+      let { ok, json } = await post("/api/lookup-ballot", { address });
+      let foundBy: string | null = null;
+      let cost = 0;
+      if (!ok && json.fallback) {
+        // No official data for this address: search the web for the area's ballot (two steps, like research).
+        setSearching(true);
+        ({ ok, json } = await post("/api/search-ballot", { address }));
+        if (ok && json.notes) {
+          ({ ok, json } = await post("/api/search-ballot", { address, notes: json.notes, gatherCost: json.cost }));
+        }
+        if (!ok || !json.ballot?.contests?.length) {
+          setNoData(true);
+          throw new Error(ok ? `We couldn't find a sample ballot for ${json.area} on the web.` : json.error);
+        }
+        foundBy = json.area;
+        cost = json.cost ?? 0;
       }
+      if (!ok) throw new Error(json.error);
       const ballot: BallotExtract = json.ballot;
       // No original file to fill in, so the review page offers the generated PDF.
       await clearOriginal();
-      setBallot(ballot, ballot.electionName ?? "Sample ballot", 0);
+      setBallot(ballot, ballot.electionName ?? "Sample ballot", cost, foundBy);
       router.push("/setup");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lookup failed");
     } finally {
       setBusy(false);
+      setSearching(false);
     }
   };
 
@@ -141,7 +160,9 @@ export default function UploadPage() {
               <Spinner className="h-5 w-5" />
               <p className="text-sm">
                 {!progress
-                  ? "Looking up your ballot…"
+                  ? searching
+                    ? "No official data for this address. Searching the web for your ballot… this can take a couple of minutes."
+                    : "Looking up your ballot…"
                   : progress.total > 1
                     ? `Reading your ballot… ${progress.done}/${progress.total} pages`
                     : "Reading your ballot… this can take a minute."}
@@ -178,7 +199,7 @@ export default function UploadPage() {
             className="mt-4"
           >
             <label htmlFor="address" className="text-[13px] text-muted">
-              No sample ballot handy? Look it up by your home address.
+              No sample ballot handy? Look it up by your home address or ZIP code.
             </label>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
               <input
@@ -196,8 +217,8 @@ export default function UploadPage() {
               </Button>
             </div>
             <p className="mt-2 text-[11px] text-faint">
-              Your address is sent to Google&apos;s Civic Information API for this lookup and isn&apos;t stored. Coverage
-              depends on your county.
+              We check Google&apos;s Civic Information API first, then search the web using only your city, state and
+              ZIP. Your address isn&apos;t stored. A full address gives the most accurate ballot.
             </p>
           </form>
         )}

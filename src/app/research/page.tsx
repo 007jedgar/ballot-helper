@@ -111,7 +111,7 @@ export default function ResearchPage() {
                 </div>
                 <Button
                   variant="ghost"
-                  className="h-7 px-2 text-[12px] opacity-0 group-hover:opacity-100"
+                  className="h-7 px-2 text-[12px] sm:opacity-0 sm:group-hover:opacity-100"
                   onClick={() => removeContest(contest.id)}
                   title="Remove if this was misread"
                 >

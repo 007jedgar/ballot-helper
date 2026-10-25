@@ -24,6 +24,8 @@ export const candidateKey = (contestId: string, index: number) => `${contestId}:
 type State = {
   ballot: Ballot | null;
   fileName: string | null;
+  /** Set when the ballot came from a web search for this area rather than an official source. */
+  foundBy: string | null;
   candidates: Record<string, Job<CandidateResearch>>;
   measures: Record<string, Job<MeasureResearch>>;
   choices: Record<string, string[]>;
@@ -45,6 +47,7 @@ type State = {
     ballot: Omit<BallotExtract, "contests"> & { contests: Omit<Contest, "id">[] },
     fileName: string,
     parseCost?: number,
+    foundBy?: string | null,
   ) => void;
   importShare: (share: ShareSnapshot) => void;
   removeContest: (id: string) => void;
@@ -66,6 +69,7 @@ type State = {
 const empty = {
   ballot: null,
   fileName: null,
+  foundBy: null,
   candidates: {},
   measures: {},
   choices: {},
@@ -84,12 +88,13 @@ export const useBallot = create<State>()(
     (set, get) => ({
       ...empty,
       prefs: DEFAULT_PREFS,
-      setBallot: (ballot, fileName, parseCost = 0) =>
+      setBallot: (ballot, fileName, parseCost = 0, foundBy = null) =>
         set((s) => ({
           ...empty,
           showFlags: s.showFlags,
           fileName,
           parseCost,
+          foundBy,
           ballot: { ...ballot, contests: ballot.contests.map((c, i) => ({ ...c, id: `c${i}` })) },
         })),
       importShare: (share) =>

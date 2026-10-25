@@ -27,7 +27,9 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Your address</strong>, if you look up your ballot by address, is sent to our server and to Google&apos;s
-          Civic Information API only to find your sample ballot. We don&apos;t keep it.
+          Civic Information API only to find your sample ballot. If Google has no ballot for it, we search the web for one
+          using only your city, state and ZIP code (sent to Anthropic for that search), never your street address. We
+          don&apos;t keep your address. Ballots found this way are cached by ZIP code for a few days.
         </li>
         <li>
           <strong>Research requests</strong> contain candidate and measure names, offices, and your ballot&apos;s

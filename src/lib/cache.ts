@@ -16,7 +16,7 @@ const norm = (s: string | null | undefined) =>
   (s ?? "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
 
 /** Stable blob path for a research subject; fields are normalized so spacing/case/punctuation don't matter. */
-export function cachePath(kind: "candidate" | "measure", fields: Record<string, string | null | undefined>, version = 1) {
+export function cachePath(kind: "candidate" | "measure" | "ballot", fields: Record<string, string | null | undefined>, version = 1) {
   const canonical = Object.keys(fields)
     .sort()
     .map((k) => `${k}=${norm(fields[k])}`)
