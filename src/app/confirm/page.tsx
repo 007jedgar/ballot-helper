@@ -164,21 +164,27 @@ function PartySelect({ value, onChange, label }: { value: string | null; onChang
   const custom = value && !partyOf(value) ? value : null;
   const current = value ? (custom ?? PARTY_LABELS[partyOf(value)!]) : NO_PARTY;
   return (
-    <select
-      aria-label={label}
-      value={current}
-      onChange={(e) => onChange(e.target.value || null)}
-      className={`h-7 rounded-md border bg-surface-2 px-1.5 text-[12px] focus:border-line-strong focus:outline-none ${
-        value ? "border-line text-muted" : "border-warn/40 text-warn"
-      }`}
-    >
-      <option value={NO_PARTY}>{value ? "No party" : "Party?"}</option>
-      {custom && <option value={custom}>{custom}</option>}
-      {PARTIES.map((p) => (
-        <option key={p} value={PARTY_LABELS[p]}>
-          {PARTY_LABELS[p]}
-        </option>
-      ))}
-    </select>
+    // The native arrow can't be padded, so it's hidden and drawn as an icon instead.
+    <span className={`relative inline-flex ${value ? "text-muted" : "text-warn"}`}>
+      <select
+        aria-label={label}
+        value={current}
+        onChange={(e) => onChange(e.target.value || null)}
+        className={`h-7 appearance-none rounded-md border bg-surface-2 pl-2 pr-7 text-[12px] focus:border-line-strong focus:outline-none ${
+          value ? "border-line" : "border-warn/40"
+        }`}
+      >
+        <option value={NO_PARTY}>{value ? "No party" : "Party?"}</option>
+        {custom && <option value={custom}>{custom}</option>}
+        {PARTIES.map((p) => (
+          <option key={p} value={PARTY_LABELS[p]}>
+            {PARTY_LABELS[p]}
+          </option>
+        ))}
+      </select>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2">
+        <path d="m4 6 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
   );
 }
