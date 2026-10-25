@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { NoBallot } from "@/components/empty-state";
 import { Badge, Button, kindLabel } from "@/components/ui";
 import { CATEGORIES, CATEGORY_LABELS, PARTIES, PARTY_LABELS, categoryOf, partyOf } from "@/lib/prefs";
+import { httpUrl } from "@/lib/schema";
 import { useBallot, useHydrated, type Contest } from "@/lib/store";
 
 /**
@@ -26,6 +27,7 @@ export default function ConfirmPage() {
     (g) => g.contests.length,
   );
   const place = [ballot.jurisdiction ?? ballot.county, ballot.state].filter(Boolean).join(", ");
+  const sources = (ballot.sources ?? []).filter((s) => httpUrl(s.url));
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-40 pt-12 sm:px-6">
@@ -44,6 +46,23 @@ export default function ConfirmPage() {
           can include several districts, so some of these races may not be on your ballot, and a few could be missing.
           Your county elections office&apos;s sample ballot is the final word.
         </p>
+      )}
+
+      {sources.length > 0 && (
+        <section className="mt-5 rounded-xl border border-line bg-surface p-4">
+          <h2 className="text-[13px] font-medium">Where this came from</h2>
+          <p className="mt-1 text-[13px] text-muted">Open these to compare against the original.</p>
+          <ul className="mt-3 space-y-2">
+            {sources.map((s) => (
+              <li key={s.url} className="flex items-start gap-2 text-[13px]">
+                {s.official ? <Badge tone="good">Official</Badge> : <Badge>Unofficial</Badge>}
+                <a href={httpUrl(s.url)!} target="_blank" rel="noreferrer" className="min-w-0 break-words leading-5 underline-offset-2 hover:underline">
+                  {s.label} ↗
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {groups.map(({ cat, contests }) => (
@@ -84,6 +103,7 @@ function ContestRow({ contest: c }: { contest: Contest }) {
   const removeContest = useBallot((s) => s.removeContest);
   const removeCandidate = useBallot((s) => s.removeCandidate);
   const setParty = useBallot((s) => s.setCandidateParty);
+  const source = httpUrl(c.sourceUrl);
 
   return (
     <li className="p-4">
@@ -96,6 +116,11 @@ function ContestRow({ contest: c }: { contest: Contest }) {
           </div>
           <p className="mt-2 text-sm font-medium">{c.title}</p>
           {c.district && <p className="text-[13px] text-muted">{c.district}</p>}
+          {source && (
+            <a href={source} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[12px] text-faint underline-offset-2 hover:text-muted hover:underline">
+              Source: {new URL(source).hostname.replace(/^www\./, "")} ↗
+            </a>
+          )}
         </div>
         <Button variant="ghost" className="h-7 px-2 text-[12px]" onClick={() => removeContest(c.id)}>
           Not on my ballot

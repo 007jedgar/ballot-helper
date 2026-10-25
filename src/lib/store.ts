@@ -3,13 +3,15 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BallotExtract, CandidateResearch, ContestExtract, MeasureResearch } from "./schema";
+import type { BallotExtract, BallotSource, CandidateResearch, ContestExtract, MeasureResearch } from "./schema";
 import { DEFAULT_PREFS, straightTicketPicks, type Party, type Prefs } from "./prefs";
 import type { ShareSnapshot } from "./share-schema";
 
 // `category` is optional: ballots saved before it existed don't have it (see categoryOf).
-export type Contest = Omit<ContestExtract, "category"> & Partial<Pick<ContestExtract, "category">> & { id: string; page?: number };
-export type Ballot = Omit<BallotExtract, "contests"> & { contests: Contest[] };
+export type Contest = Omit<ContestExtract, "category"> &
+  Partial<Pick<ContestExtract, "category">> & { id: string; page?: number; sourceUrl?: string | null };
+/** `sources` is set for looked-up ballots: where the contests came from. */
+export type Ballot = Omit<BallotExtract, "contests"> & { contests: Contest[]; sources?: BallotSource[] };
 
 export type Job<T> = {
   status: "idle" | "loading" | "done" | "error";
@@ -44,7 +46,7 @@ type State = {
   exported: boolean;
   supportDismissed: boolean;
   setBallot: (
-    ballot: Omit<BallotExtract, "contests"> & { contests: Omit<Contest, "id">[] },
+    ballot: Omit<Ballot, "contests"> & { contests: Omit<Contest, "id">[] },
     fileName: string,
     parseCost?: number,
     foundBy?: string | null,

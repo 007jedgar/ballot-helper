@@ -46,6 +46,38 @@ export const BallotSchema = z.object({
 export type BallotExtract = z.infer<typeof BallotSchema>;
 export type ContestExtract = z.infer<typeof ContestSchema>;
 
+/** Where a looked-up ballot came from (uploads are their own source). */
+export const BallotSourceSchema = z.object({
+  label: z.string().describe('Who published it and what it is, e.g. "Franklin County Board of Elections: sample ballot"'),
+  url: z.string(),
+  official: z.boolean().describe("True for government election offices and secretaries of state"),
+});
+
+export type BallotSource = z.infer<typeof BallotSourceSchema>;
+
+/** A ballot found by web search, with a source for each contest. */
+export const SourcedBallotSchema = BallotSchema.extend({
+  contests: z.array(
+    ContestSchema.extend({
+      sourceUrl: z.string().nullable().describe("The URL the notes cite for this contest, or null"),
+    }),
+  ),
+  sources: z.array(BallotSourceSchema).describe("The main pages the ballot came from (at most 5), official ones first"),
+});
+
+export type SourcedBallot = z.infer<typeof SourcedBallotSchema>;
+
+/** The URL if it's a plain http(s) link, else null (never render model-written javascript: or data: URLs). */
+export function httpUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- Candidate research ----------
 
 const LinkSchema = z.object({ label: z.string(), url: z.string() });

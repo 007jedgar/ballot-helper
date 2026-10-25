@@ -5,7 +5,7 @@ import { BALLOT_SEARCH_STRUCTURE, BALLOT_SEARCH_SYSTEM, areaOf, ballotSearchTask
 import { cachePath, readCache, writeCache } from "@/lib/cache";
 import { costed, errorResponse } from "@/lib/http";
 import { mockBallot, mockEnabled } from "@/lib/mock";
-import { BallotSchema, type BallotExtract } from "@/lib/schema";
+import { SourcedBallotSchema, httpUrl, type SourcedBallot } from "@/lib/schema";
 
 export const maxDuration = 300;
 
@@ -31,11 +31,17 @@ export async function POST(req: Request) {
   try {
     if (mockEnabled()) {
       if (!notes) return Response.json({ notes: "mock notes", cost: 0.08 });
-      return Response.json({ ballot: await mockBallot(), area: where.area, cost: 0.12 });
+      const ballot = await mockBallot();
+      const sources = [
+        { label: "Franklin County Board of Elections: sample ballots", url: "https://vote.franklincountyohio.gov/", official: true },
+        { label: "Ballotpedia: Franklin County, Ohio elections (2026)", url: "https://ballotpedia.org/Franklin_County,_Ohio", official: false },
+      ];
+      return Response.json({ ballot: { ...ballot, sources, contests: ballot.contests.map((c) => ({ ...c, sourceUrl: sources[0].url })) }, area: where.area, cost: 0.12 });
     }
-    const path = cachePath("ballot", { area });
+    // v2: entries carry sources.
+    const path = cachePath("ballot", { area }, 2);
     if (!notes) {
-      const cached = await readCache<BallotExtract>(path);
+      const cached = await readCache<SourcedBallot>(path);
       if (cached) return Response.json({ ballot: cached.data, area: where.area, cached: true, cost: cached.cost });
     }
     // Same limits as reading an uploaded ballot; only gathering is stopped by the daily budget.
@@ -45,9 +51,14 @@ export async function POST(req: Request) {
     if (!notes) {
       return Response.json(await costed("ballot-search", await gatherNotes(BALLOT_SEARCH_SYSTEM, task, { searches: 8, fetches: 5 }), "notes"));
     }
-    const analyzed = await analyzeNotes(BallotSchema, { task, notes, structureHint: BALLOT_SEARCH_STRUCTURE, tier: "candidate", effort: "low" });
+    const analyzed = await analyzeNotes(SourcedBallotSchema, { task, notes, structureHint: BALLOT_SEARCH_STRUCTURE, tier: "candidate", effort: "low" });
     await recordSpend(analyzed.cost);
-    const ballot = analyzed.value;
+    // Links come from a model: keep only plain http(s) URLs.
+    const ballot: SourcedBallot = {
+      ...analyzed.value,
+      contests: analyzed.value.contests.map((c) => ({ ...c, sourceUrl: httpUrl(c.sourceUrl) })),
+      sources: analyzed.value.sources.filter((s) => httpUrl(s.url)),
+    };
     const cost = analyzed.cost == null ? null : analyzed.cost + (gatherCost ?? 0);
     if (ballot.contests.length) await writeCache(path, ballot, cost, TTL_DAYS);
     return Response.json({ ballot, area: where.area, cost });

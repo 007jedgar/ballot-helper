@@ -1,5 +1,5 @@
 import "server-only";
-import type { BallotExtract, ContestExtract } from "./schema";
+import type { BallotExtract, BallotSource, ContestExtract } from "./schema";
 
 /**
  * Sample ballot lookup by address via the Google Civic Information API
@@ -35,8 +35,10 @@ type CivicContest = {
   referendumBrief?: string;
   referendumBallotResponses?: string[];
 };
+type AdminBody = { name?: string; ballotInfoUrl?: string; electionInfoUrl?: string };
 type VoterInfo = {
   election?: { name?: string; electionDay?: string };
+  state?: { name?: string; electionAdministrationBody?: AdminBody; local_jurisdiction?: { name?: string; electionAdministrationBody?: AdminBody } }[];
   normalizedInput?: { city?: string; state?: string };
   contests?: CivicContest[];
 };
@@ -123,7 +125,24 @@ function toContest(c: CivicContest): ContestExtract | null {
   };
 }
 
-export function voterInfoToBallot(info: VoterInfo): BallotExtract {
+/** Google's data provider, plus the local and state election offices' ballot pages when Google lists them. */
+function sourcesOf(info: VoterInfo): BallotSource[] {
+  const sources: BallotSource[] = [];
+  const state = info.state?.[0];
+  for (const [owner, body] of [
+    [state?.local_jurisdiction?.name, state?.local_jurisdiction?.electionAdministrationBody],
+    [state?.name, state?.electionAdministrationBody],
+  ] as const) {
+    const url = body?.ballotInfoUrl || body?.electionInfoUrl;
+    if (url && /^https?:\/\//.test(url) && !sources.some((s) => s.url === url)) {
+      sources.push({ label: `${body?.name || owner || "Election office"}: ${body?.ballotInfoUrl ? "ballot information" : "election information"}`, url, official: true });
+    }
+  }
+  sources.push({ label: "Voting Information Project, via Google Civic Information", url: "https://www.votinginfoproject.org/", official: false });
+  return sources;
+}
+
+export function voterInfoToBallot(info: VoterInfo): BallotExtract & { sources: BallotSource[] } {
   const contests = (info.contests ?? [])
     .map((c, i) => ({ c, i }))
     // Ballot placement when provided, otherwise the API's own order.
@@ -138,10 +157,11 @@ export function voterInfoToBallot(info: VoterInfo): BallotExtract {
     county: null,
     jurisdiction: info.normalizedInput?.city ?? null,
     contests,
+    sources: sourcesOf(info),
   };
 }
 
-export async function lookupBallot(address: string): Promise<BallotExtract> {
+export async function lookupBallot(address: string): Promise<BallotExtract & { sources: BallotSource[] }> {
   const key = process.env.GOOGLE_CIVIC_API_KEY;
   if (!key) throw new LookupError(NO_DATA, 404);
   const url = new URL("https://www.googleapis.com/civicinfo/v2/voterinfo");
