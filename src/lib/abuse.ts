@@ -20,12 +20,14 @@ const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
 const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 const redis = url && token ? new Redis({ url, token }) : null;
 
-type Kind = "parse" | "research" | "share";
+type Kind = "parse" | "lookup" | "research" | "share";
 type Rule = { device: number; ip: number; window: Duration; label: string };
 
 const RULES: Record<Kind, Rule> = {
   // Ballot pages read (a ballot is usually 1-6 pages).
   parse: { device: 40, ip: 150, window: "1 h", label: "ballot uploads" },
+  // Address lookups (no AI cost, but each one spends Google API quota).
+  lookup: { device: 20, ip: 100, window: "1 h", label: "address lookups" },
   // New research requests (each candidate is 2: gather + analyze). Cache hits don't count.
   research: { device: 800, ip: 3000, window: "1 d", label: "research requests" },
   share: { device: 20, ip: 60, window: "1 h", label: "share links" },

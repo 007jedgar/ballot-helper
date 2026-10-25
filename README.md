@@ -3,6 +3,7 @@
 Upload your sample ballot and get nonpartisan research on every race and measure on it. Then compare your options in a step-by-step wizard and export a marked-up sample ballot.
 
 - **Upload** a PDF, screenshot, or photo. AI reads every contest (multi-page PDFs are split and read page by page).
+- **Or look up by address.** With `GOOGLE_CIVIC_API_KEY` set, the home page can fetch the sample ballot for a home address from the Google Civic Information API. Coverage depends on what each county publishes. When there's no data, the app links to VOTE411 and Ballotpedia so the voter can get the ballot there and upload it. The address isn't stored.
 - **Choose what to research.** Before research starts, you pick what you care about, and the app researches only that:
   - **Straight ticket:** in partisan races, only your party's candidates are checked (qualifications and red flags), and they can be pre-selected.
   - **Topics:** qualifications, positions, endorsements, record, criticisms, red flags, news, or presets like "Red flags only". Fewer topics means fewer web searches per candidate and lighter analysis.
@@ -38,8 +39,9 @@ To work on the UI without an API key, run with fixture data: `MOCK_AI=1 npm run 
 
 1. Import this repo at vercel.com/new. No configuration is needed.
 2. Add `ANTHROPIC_API_KEY` (or `GROQ_API_KEY`) under Settings → Environment Variables.
-3. Optional, recommended: create a **private** Blob store under Storage and connect it to the project to turn on the 30-day research cache.
-4. Deploy.
+3. Optional: add `GOOGLE_CIVIC_API_KEY` (Google Cloud console → enable the Civic Information API → create an API key restricted to that API) to turn on address lookup. It's read at build time to show the form, so redeploy after adding it.
+4. Optional, recommended: create a **private** Blob store under Storage and connect it to the project to turn on the 30-day research cache.
+5. Deploy.
 
 The API routes set `maxDuration = 300`, which fits within Hobby limits with Fluid Compute (on by default). Each research job takes two requests (gather notes, then analyze), so each step gets the full time limit.
 
