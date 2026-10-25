@@ -39,7 +39,7 @@ function matches(line: string, target: string) {
   return lk.length >= 6 && key(target).startsWith(lk);
 }
 
-function groupLines(items: { str: string; transform: number[]; width: number; height: number }[], page: number): Line[] {
+export function groupLines(items: { str: string; transform: number[]; width: number; height: number }[], page: number): Line[] {
   const parts = items
     .filter((i) => i.str.trim())
     .map((i) => ({ text: i.str, x: i.transform[4], y: i.transform[5], w: i.width, h: i.height || Math.abs(i.transform[3]) }))
@@ -55,29 +55,64 @@ function groupLines(items: { str: string; transform: number[]; width: number; he
   return lines;
 }
 
+const sameColumn = (a: Line, b: Line) => a.page === b.page && Math.abs(a.x - b.x) < 60;
+/** Page by page, column by column, top to bottom. */
+const readingOrder = (a: Line, b: Line) => a.page - b.page || (sameColumn(a, b) ? b.y - a.y : a.x - b.x);
+const commonPrefix = (a: string, b: string) => {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+};
+
+/**
+ * Lines that start this contest's heading, best match first. Headings often
+ * repeat ("Proposed Constitutional Amendment" over every question), so each
+ * candidate line is read together with the few lines under it ("Question 1")
+ * and scored by how much of the title they spell out. The extracted title may
+ * be split into title + district or drop leading words, so any word of the
+ * title can be where the match starts.
+ */
+function headings(pool: Line[], contest: Contest): Line[] {
+  const titleWords = words(`${contest.title} ${contest.district ?? ""}`);
+  const starts = titleWords.map((_, i) => titleWords.slice(i).join(""));
+  const scored = pool.map((line) => {
+    const block = pool
+      .filter((l) => sameColumn(l, line) && l.y <= line.y && line.y - l.y < line.h * 6)
+      .sort((a, b) => b.y - a.y)
+      .slice(0, 4)
+      .map((l) => key(l.text))
+      .join("");
+    return { line, score: Math.max(...starts.map((s) => commonPrefix(block, s))) };
+  });
+  const best = Math.max(6, ...scored.map((s) => s.score));
+  return scored
+    .filter((s) => s.score === best)
+    .map((s) => s.line)
+    .sort(readingOrder);
+}
+
 /** The line for `target` under this contest's heading, or null. */
-function locate(lines: Line[], contest: Contest, target: string, needsAnchor: boolean): Line | null {
+export function locate(lines: Line[], ballot: Ballot, contest: Contest, target: string, needsAnchor: boolean): Line | null {
   const pages = contest.page == null ? null : new Set([contest.page, contest.page + 1]);
   const pool = pages ? lines.filter((l) => pages.has(l.page)) : lines;
   const hits = pool.filter((l) => matches(l.text, target));
   if (!hits.length) return null;
   if (hits.length === 1 && !needsAnchor) return hits[0];
 
-  // Several matches (e.g. FOR/AGAINST under each proposition): take the one
-  // closest below a line that starts this contest's title, in the same column.
-  // The extracted title may be split into title + district ("HCAD Director,
-  // At-Large" + "Place 1") or reworded slightly, so match either way round.
-  const titleKey = key(contest.title);
-  const fullKey = key(`${contest.title} ${contest.district ?? ""}`);
-  const anchors = pool.filter((l) => {
-    const k = key(l.text);
-    return k.length >= 6 && (fullKey.startsWith(k) || titleKey.startsWith(k) || k.startsWith(titleKey));
-  });
+  // Several matches (e.g. Yes/No under each proposition): take the one closest
+  // below this contest's heading, in the same column.
+  let anchors = headings(pool, contest);
+  // Identical headings for different contests (e.g. the questions' numbers
+  // weren't transcribed): the Nth such contest on the ballot is the Nth heading.
+  if (anchors.length > 1) {
+    const twins = ballot.contests.filter((c) => key(`${c.title} ${c.district ?? ""}`) === key(`${contest.title} ${contest.district ?? ""}`));
+    if (twins.length === anchors.length) anchors = [anchors[twins.indexOf(contest)]];
+  }
   let best: { line: Line; d: number } | null = null;
   for (const hit of hits) {
     for (const a of anchors) {
       const d = a.y - hit.y;
-      if (a.page === hit.page && d > 0 && d < 700 && Math.abs(a.x - hit.x) < 60 && (!best || d < best.d)) best = { line: hit, d };
+      if (sameColumn(a, hit) && d > 0 && d < 700 && (!best || d < best.d)) best = { line: hit, d };
     }
   }
   return best?.line ?? (needsAnchor ? null : hits[0]);
@@ -148,7 +183,7 @@ export async function markOriginal(
   const targets: Line[] = [];
   for (const contest of ballot.contests) {
     for (const pick of choices[contest.id] ?? []) {
-      const line = locate(lines, contest, pick, contest.kind !== "candidate");
+      const line = locate(lines, ballot, contest, pick, contest.kind !== "candidate");
       if (line) targets.push(line);
       else report.missing.push(`${contest.title}: ${pick}`);
     }
